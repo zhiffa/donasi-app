@@ -1,35 +1,32 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { supabase } from '@/lib/supabaseClient';
 import { verifyUser } from '@/lib/auth';
+import { snap } from '@/lib/midtrans'; // Import helper Midtrans
 
 interface DonationRequestBody {
   programId: string;
   samarkanNama: boolean;
   donationType: 'uang' | 'barang';
-  // Uang
   nominal?: number;
   paymentMethod?: string;
-  // Barang
   goods?: { jenis: string; jumlah: string }[];
-  deliveryMethod?: 'Self-Delivery' | 'Pick-up'; // Sesuaikan dengan ENUM DB
-  // Pick-up
+  deliveryMethod?: 'Self-Delivery' | 'Pick-up';
   pickupAddress?: string;
   pickupDate?: string;
   pickupTimeSlot?: string;
 }
 
 export async function POST(request: NextRequest) {
-  // 1. Verifikasi User
   const auth = await verifyUser(request);
   if (!auth.isAuthenticated || !auth.userId) {
     return NextResponse.json({ message: 'Akses ditolak: Anda harus login' }, { status: 401 });
   }
 
   try {
-    // 2. Dapatkan id_donatur
+    // 1. Ambil Data Donatur & User untuk data Customer Midtrans
     const { data: donaturData, error: donaturError } = await supabase
       .from('donatur')
-      .select('id_donatur')
+      .select('id_donatur, user (nama, email, phone)')
       .eq('id_user', auth.userId)
       .single();
 
@@ -37,59 +34,81 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Data donatur tidak ditemukan' }, { status: 404 });
     }
 
-    // 3. Proses data body
+    // Handle data user (bisa array/object tergantung response join)
+    const userData = Array.isArray(donaturData.user) ? donaturData.user[0] : donaturData.user;
+
+    // 2. Proses Body Request
     const body: DonationRequestBody = await request.json();
     const {
-      programId,
-      samarkanNama,
-      donationType,
-      nominal,
-      paymentMethod,
-      goods,
-      deliveryMethod,
-      pickupAddress,
-      pickupDate,
-      pickupTimeSlot
+      programId, samarkanNama, donationType, nominal,
+      goods, deliveryMethod, pickupAddress, pickupDate, pickupTimeSlot
     } = body;
 
-    // Persiapan data barang (gabungkan array menjadi string)
+    // Persiapan data barang
     const namaBarang = goods ? goods.map(g => g.jenis).join(', ') : null;
     const deskripsiBarang = goods ? goods.map(g => `${g.jenis} (${g.jumlah})`).join('; ') : null;
-
-    // Persiapan Tanggal Jemput (Gabungkan Date & Time untuk format Timestamp)
+    
+    // Persiapan tanggal jemput
     let tglJemputISO = null;
     if (donationType === 'barang' && deliveryMethod === 'Pick-up' && pickupDate && pickupTimeSlot) {
-       // Ambil jam awal, misal "09:00 - 12:00" -> ambil "09:00"
        const timePart = pickupTimeSlot.split(' - ')[0]; 
-       // Gabungkan jadi ISO string (YYYY-MM-DDTHH:mm:ss)
-       // Note: Kita asumsikan input lokal, tambah 'Z' atau offset jika perlu
        tglJemputISO = `${pickupDate}T${timePart}:00`; 
     }
 
-    // 4. Panggil RPC 'submit_donation' (Transaksi Database)
+    // 3. Simpan ke Database (Status Awal: Pending)
     const { data: newDonationId, error: rpcError } = await supabase.rpc('submit_donation', {
       p_id_donatur: donaturData.id_donatur,
       p_id_kegiatan: parseInt(programId),
       p_anonim: samarkanNama,
-      p_jenis_donasi: donationType === 'uang' ? 'Uang' : 'Barang', // Sesuaikan Case Enum
+      p_jenis_donasi: donationType === 'uang' ? 'Uang' : 'Barang',
       p_nominal: donationType === 'uang' ? nominal : null,
-      p_metode_pembayaran: donationType === 'uang' ? paymentMethod : null,
+      p_metode_pembayaran: donationType === 'uang' ? 'Midtrans' : null, 
       p_nama_barang: donationType === 'barang' ? namaBarang : null,
       p_deskripsi_barang: donationType === 'barang' ? deskripsiBarang : null,
       p_metode_pengiriman: donationType === 'barang' ? deliveryMethod : null,
-      // Parameter Pick-up
       p_alamat_jemput: pickupAddress || null,
       p_tanggal_jemput: tglJemputISO || null,
       p_jam_jemput: pickupTimeSlot || null
     });
 
-    if (rpcError) {
-       console.error('[RPC_ERROR]', rpcError);
-       throw rpcError;
+    if (rpcError) throw rpcError;
+
+    // 4. INTEGRASI MIDTRANS (Khusus Donasi Uang)
+    let snapToken = null;
+
+    if (donationType === 'uang' && nominal) {
+        // Buat parameter transaksi Midtrans
+        const parameter = {
+            transaction_details: {
+                // Order ID unik: DONASI-[ID]-[TIMESTAMP]
+                order_id: `DONASI-${newDonationId}-${Math.floor(Date.now() / 1000)}`, 
+                gross_amount: nominal,
+            },
+            customer_details: {
+                first_name: userData?.nama || 'Donatur',
+                email: userData?.email || 'email@example.com',
+                phone: userData?.phone || '08123456789',
+            },
+            item_details: [{
+                id: `PROG-${programId}`,
+                price: nominal,
+                quantity: 1,
+                name: `Donasi Program #${programId}`
+            }]
+        };
+
+        // Minta Token ke Midtrans
+        // @ts-ignore
+        const transaction = await snap.createTransaction(parameter);
+        snapToken = transaction.token;
     }
 
     return NextResponse.json(
-      { message: 'Donasi berhasil dikirim! Terima kasih atas kebaikan Anda.', donationId: newDonationId },
+      { 
+        message: 'Donasi berhasil dibuat!', 
+        donationId: newDonationId,
+        snapToken: snapToken // Token ini akan dipakai frontend untuk popup
+      },
       { status: 201 }
     );
 

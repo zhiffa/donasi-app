@@ -1,9 +1,8 @@
-import { NextResponse, type NextRequest } from 'next/server'; // <-- PERBAIKAN 1: Tambah NextRequest
+import { NextResponse, type NextRequest } from 'next/server';
 import { supabase } from '@/lib/supabaseClient'; 
 import { verifyAdmin } from '@/lib/auth';
 
-// --- FUNGSI GET (Mengambil semua donasi untuk verifikasi) ---
-export async function GET(request: NextRequest) { // <-- PERBAIKAN 2: Ganti Request ke NextRequest
+export async function GET(request: NextRequest) {
   const auth = await verifyAdmin(request);
 
   if (!auth.isAdmin) {
@@ -14,7 +13,7 @@ export async function GET(request: NextRequest) { // <-- PERBAIKAN 2: Ganti Requ
   }
 
   try {
-    // --- PERUBAHAN KE SUPABASE ---
+    // --- PERUBAHAN: Tambahkan 'metode_pembayaran' di select ---
     const { data, error } = await supabase
       .from('donasi')
       .select(`
@@ -24,26 +23,23 @@ export async function GET(request: NextRequest) { // <-- PERBAIKAN 2: Ganti Requ
         created_at,
         nominal,
         nama_barang,
+        metode_pembayaran, 
         donatur ( user ( nama ) )
       `)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
     
-    // Ratakan (flatten) data agar sesuai output lama
-    // <-- PERBAIKAN 3: Casting ke 'any[]' untuk menghindari error TypeScript pada nested object
     const donations = (data as any[]).map(d => {
-        // Handle kemungkinan donatur/user dikembalikan sebagai array oleh Supabase
         const donaturObj = Array.isArray(d.donatur) ? d.donatur[0] : d.donatur;
         const userObj = donaturObj && Array.isArray(donaturObj.user) ? donaturObj.user[0] : donaturObj?.user;
 
         return {
             ...d,
             nama_donatur: userObj?.nama || 'Tanpa Nama',
-            donatur: undefined // Hapus data nested
+            donatur: undefined 
         };
     });
-    // --- AKHIR PERUBAHAN ---
     
     return NextResponse.json(donations, { status: 200 });
   } catch (error) {

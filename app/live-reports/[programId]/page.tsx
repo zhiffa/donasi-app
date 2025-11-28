@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 
-// Pastikan komponen-komponen ini ada atau buat placeholder sementara
+// Impor komponen-komponen yang sudah dibuat
 import MyDonationStatus from '@/components/MyDonationStatus'
 import DonasiMasuk from '@/components/DonasiMasuk'
 import PengeluaranDana from '@/components/PengeluaranDana'
@@ -17,6 +17,7 @@ export default function LiveReportPage({ params }: { params: { programId: string
   const [programName, setProgramName] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // Ambil Nama Program untuk Judul
   useEffect(() => {
     if (programId) {
       async function fetchProgramData() {
@@ -66,16 +67,16 @@ export default function LiveReportPage({ params }: { params: { programId: string
         </p>
 
         {/* --- BAGIAN 1: STATUS DONASI SAYA --- */}
-        {/* Komponen ini harus bisa menangani logic fetching status donasi user untuk program ini */}
+        {/* Komponen ini otomatis mengecek apakah user login & punya donasi di sini */}
         <MyDonationStatus programId={programId} />
 
         {/* --- BAGIAN 2: LAPORAN PUBLIK --- */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
           
-          {/* Daftar Donasi Masuk */}
+          {/* Daftar Donasi Masuk (Data Realtime) */}
           <DonasiMasuk programId={programId} />
 
-          {/* Daftar Pengeluaran */}
+          {/* Daftar Pengeluaran (Data dari Admin) */}
           <PengeluaranDana programId={programId} />
 
         </div>

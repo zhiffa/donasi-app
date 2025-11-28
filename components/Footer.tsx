@@ -25,7 +25,7 @@ export default function Footer() {
           <p className="italic text-gray-400">"(n) A space that brings light to those in need."</p>
           <div className="flex items-center gap-3">
             <Mail className="h-5 w-5 text-pastel-pink-dark" />
-            <span>info@komunitas.com</span>
+            <span>info@shinesmilesabhimata.com</span>
           </div>
           <div className="flex items-center gap-3">
             <Phone className="h-5 w-5 text-pastel-pink-dark" />
@@ -36,7 +36,7 @@ export default function Footer() {
       </div>
       <div className="border-t border-gray-700 py-4 text-center">
         <p className="text-sm text-gray-500">
-          © {new Date().getFullYear()} Shine in Smiles Yayasan XYZ. All rights reserved.
+          © {new Date().getFullYear()} Shine in Smiles By Yayasan Abhimata. All rights reserved.
         </p>
       </div>
     </footer>

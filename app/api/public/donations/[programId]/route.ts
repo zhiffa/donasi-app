@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabaseClient';
+import { createClient } from '@supabase/supabase-js';
 
-// --- PERBAIKAN: MATIKAN CACHE AGAR DATA SELALU FRESH ---
-export const dynamic = 'force-dynamic'; 
-// -------------------------------------------------------
+export const dynamic = 'force-dynamic';
 
-// API Publik: Mengambil daftar donasi yang DITERIMA untuk program tertentu
+// Pastikan variabel ini ada
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY!;
+
+const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+
 export async function GET(
   request: Request,
   { params }: { params: { programId: string } }
@@ -13,42 +16,30 @@ export async function GET(
   const programId = params.programId;
 
   try {
-    const { data, error } = await supabase
+    // Versi Sederhana: Tanpa Join ke user/donatur dulu
+    // Kita hanya ambil data tabel 'donasi'
+    const { data, error } = await supabaseAdmin
       .from('donasi')
-      .select(`
-        id_donasi,
-        nominal,
-        nama_barang,
-        jenis_donasi,
-        anonim,
-        created_at,
-        donatur ( user ( nama ) )
-      `)
+      .select('id_donasi, nominal, nama_barang, jenis_donasi, anonim, created_at, status')
       .eq('id_kegiatan', parseInt(programId))
-      .eq('status', 'Diterima') // Pastikan status di DB persis 'Diterima' (Huruf besar D)
+      .eq('status', 'Diterima') // Pastikan D besar
       .order('created_at', { ascending: false });
 
     if (error) throw error;
 
-    // Format data untuk menyamarkan nama jika anonim
-    const publicDonations = (data as any[]).map(d => {
-        // Handle array/object dari join
-        const donaturObj = Array.isArray(d.donatur) ? d.donatur[0] : d.donatur;
-        const userObj = donaturObj && Array.isArray(donaturObj.user) ? donaturObj.user[0] : donaturObj?.user;
-        
-        return {
-            id: d.id_donasi,
-            nama: d.anonim ? 'Hamba Allah' : (userObj?.nama || 'Donatur'),
-            nominal: d.nominal,
-            barang: d.nama_barang,
-            jenis: d.jenis_donasi,
-            tanggal: d.created_at
-        };
-    });
+    // Mapping sederhana
+    const publicDonations = (data || []).map(d => ({
+        id: d.id_donasi,
+        nama: d.anonim ? 'Hamba Allah' : 'Donatur', // Sementara hardcode dulu
+        nominal: d.nominal,
+        barang: d.nama_barang,
+        jenis: d.jenis_donasi,
+        tanggal: d.created_at
+    }));
 
     return NextResponse.json(publicDonations, { status: 200 });
-  } catch (error) {
-    console.error('[PUBLIC_DONATIONS_GET]', error);
-    return NextResponse.json({ message: 'Error fetching donations' }, { status: 500 });
+  } catch (error: any) {
+    console.error('[PUBLIC_DONATIONS_ERROR]', error.message);
+    return NextResponse.json({ message: error.message }, { status: 500 });
   }
 }

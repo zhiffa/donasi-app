@@ -7,7 +7,7 @@ export default function AboutUs() {
         {/* Kiri: Foto */}
         <div className="overflow-hidden rounded-lg shadow-lg">
           <Image
-            src="https://via.placeholder.com/600x400" // Ganti dengan foto kegiatan
+            src="/img1.png" 
             alt="Kegiatan Komunitas"
             width={600}
             height={400}
@@ -18,16 +18,17 @@ export default function AboutUs() {
         {/* Kanan: Teks */}
         <div className="text-gray-700">
           <h2 className="mb-4 text-3xl font-bold text-gray-900 md:text-4xl">
-            Who We Are
+            Who We Are?
           </h2>
           <p className="mb-4 text-lg leading-relaxed">
-            Ini adalah paragraf penjelasan singkat tentang komunitas atau yayasan Anda. 
-            Jelaskan misi, visi, dan apa yang membuat komunitas Anda unik. 
-            Pastikan bahasa yang digunakan profesional namun tetap hangat.
+           Shine in Smiles adalah komunitas sosial dibawah naungan Yayasan Abhimata
+           yang berfokus pada kegiatan berbagi, mengajar, dan aksi sosial untuk membawa 
+           kebahagiaan serta harapan bagi mereka yang membutuhkan. 
           </p>
           <p className="text-lg leading-relaxed">
-            Fokus pada dampak yang telah Anda buat dan tujuan Anda ke depan. 
-            Ini adalah kesempatan untuk terhubung dengan calon donatur.
+            Dengan semangat kepedulian, komunitas ini berusaha menciptakan lingkungan yang suportif, 
+            inklusif, dan penuh kehangatan, di mana setiap senyuman yang terukir menjadi 
+            simbol dari dampak positif yang diberikan.
           </p>
         </div>
       </div>

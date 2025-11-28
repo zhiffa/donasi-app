@@ -9,12 +9,12 @@ export default function Achievements() {
     },
     { 
       icon: <Users className="h-12 w-12 text-pastel-pink-dark" />, 
-      value: "5.000+", 
+      value: "1.000+", 
       label: "Penerima Manfaat" 
     },
     { 
       icon: <PackageCheck className="h-12 w-12 text-pastel-pink-dark" />, 
-      value: "150+", 
+      value: "20+", 
       label: "Proyek Selesai" 
     },
   ]

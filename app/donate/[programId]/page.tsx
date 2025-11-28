@@ -5,12 +5,14 @@ import { useRouter } from 'next/navigation'
 import { Trash2, Loader2, LogIn } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
+import Script from 'next/script' // <-- PENTING: Untuk load script Midtrans
 
 // Tipe data
 type DonationType = 'uang' | 'barang' | null
 type DonationStep = 'initialForm' | 'donationConfirmation' | 'deliveryOptions' | 'pickupDetails' | 'paymentOptions' | 'finalSummary'
 type DeliveryMethod = 'self' | 'pickup' | null
-type PaymentMethod = 'ewallet' | 'va' | 'qris' | null
+// PaymentMethod tidak dipilih manual di awal, tapi via Snap nanti
+type PaymentMethod = 'midtrans' | null 
 
 interface GoodItem {
   id: number;
@@ -31,13 +33,13 @@ interface User {
 // Opsi Jam Penjemputan
 const PICKUP_TIMES = ['08:00 - 10:00', '13:00 - 15:00', '16:00 - 19:00'];
 
-// --- LOGIKA BARU: Generate Tanggal Valid (Senin, Rabu, Jumat) ---
+// --- LOGIKA TANGGAL (Senin/Rabu/Jumat) ---
 const getNextPickupDates = () => {
   const dates: Date[] = [];
   const date = new Date();
   date.setDate(date.getDate() + 1); // Mulai cek dari BESOK (H+1) agar admin punya waktu persiapan
 
-  // Cari 6 opsi tanggal valid ke depan (kurang lebih untuk 2 minggu ke depan)
+  // Cari 6 opsi tanggal valid ke depan
   while (dates.length < 6) {
     const day = date.getDay(); // 0=Minggu, 1=Senin, ... 6=Sabtu
     
@@ -90,7 +92,7 @@ export default function DonationFormPage({ params }: { params: DonationPageParam
   const [pickupDate, setPickupDate] = useState('');
   const [pickupTimeSlot, setPickupTimeSlot] = useState('');
   
-  // State Opsi Tanggal (Diisi otomatis saat komponen dimuat)
+  // State Opsi Tanggal
   const [availableDates, setAvailableDates] = useState<Date[]>([]);
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(null);
@@ -155,13 +157,20 @@ export default function DonationFormPage({ params }: { params: DonationPageParam
         alert('Data pengguna tidak ditemukan, silakan refresh.');
         return;
     }
-    setDonationStep('donationConfirmation');
+
+    // --- LOGIKA PERCABANGAN FLOW ---
+    if (donationType === 'uang') {
+        // Jika Uang, langsung submit untuk dapat token Midtrans
+        submitDonation('uang');
+    } else {
+        // Jika Barang, lanjut ke konfirmasi
+        setDonationStep('donationConfirmation');
+    }
   };
 
   const handleConfirmationSubmit = () => {
-      if (donationType === 'uang') {
-          setDonationStep('paymentOptions');
-      } else if (donationType === 'barang') {
+      // Logic ini hanya untuk barang sekarang, karena uang langsung submit di step 1
+      if (donationType === 'barang') {
           setDonationStep('deliveryOptions');
       }
   };
@@ -175,7 +184,7 @@ export default function DonationFormPage({ params }: { params: DonationPageParam
       if (deliveryMethod === 'pickup') {
           setDonationStep('pickupDetails');
       } else {
-          submitDonation('self'); 
+          submitDonation('barang_self'); 
       }
   };
 
@@ -185,26 +194,19 @@ export default function DonationFormPage({ params }: { params: DonationPageParam
           alert('Lengkapi detail penjemputan.');
           return;
       }
-      submitDonation('pickup');
+      submitDonation('barang_pickup');
    };
 
-  const handlePaymentSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!paymentMethod) {
-        alert('Pilih metode pembayaran.');
-        return;
-    }
-    submitDonation(null); 
-  };
+   // (Step PaymentMethod manual dihapus karena diganti Midtrans Snap)
 
-  // --- FUNGSI SUBMIT ---
-  const submitDonation = async (finalDeliveryMethod: DeliveryMethod | null) => {
+  // --- FUNGSI SUBMIT UTAMA ---
+  const submitDonation = async (flowType: string) => {
     setIsSubmitting(true);
 
     let apiDeliveryMethod = null;
     if (donationType === 'barang') {
-      if (finalDeliveryMethod === 'self') apiDeliveryMethod = 'Self-Delivery';
-      else if (finalDeliveryMethod === 'pickup') apiDeliveryMethod = 'Pick-up';
+      if (flowType === 'barang_self') apiDeliveryMethod = 'Self-Delivery';
+      else if (flowType === 'barang_pickup') apiDeliveryMethod = 'Pick-up';
     }
 
     const payload = {
@@ -212,7 +214,7 @@ export default function DonationFormPage({ params }: { params: DonationPageParam
       samarkanNama: samarkanNama,
       donationType: donationType,
       nominal: donationType === 'uang' ? parseFloat(nominal) : undefined,
-      paymentMethod: donationType === 'uang' ? paymentMethod : undefined,
+      // paymentMethod tidak perlu dikirim manual, backend handle default 'Midtrans'
       goods: donationType === 'barang' ? goods : undefined,
       deliveryMethod: apiDeliveryMethod,
       pickupAddress: pickupAddress || undefined,
@@ -233,11 +235,38 @@ export default function DonationFormPage({ params }: { params: DonationPageParam
         throw new Error(data.message || 'Gagal mengirim donasi');
       }
 
-      setDonationStep('finalSummary');
+      // --- INTEGRASI MIDTRANS SNAP ---
+      if (donationType === 'uang' && data.snapToken) {
+        // @ts-ignore - Snap diload dari script eksternal
+        window.snap.pay(data.snapToken, {
+          onSuccess: function(result: any) {
+            // Pembayaran sukses
+            setDonationStep('finalSummary');
+            setIsSubmitting(false);
+          },
+          onPending: function(result: any) {
+            // Menunggu pembayaran (misal VA, user tutup popup tapi belum bayar)
+            setDonationStep('finalSummary');
+            setIsSubmitting(false);
+          },
+          onError: function(result: any) {
+            alert("Pembayaran gagal!");
+            setIsSubmitting(false);
+          },
+          onClose: function() {
+            alert('Anda menutup popup pembayaran sebelum menyelesaikan transaksi.');
+            setIsSubmitting(false);
+          }
+        });
+      } else {
+        // Jika Barang -> Langsung sukses (tidak ada pembayaran)
+        setDonationStep('finalSummary');
+        setIsSubmitting(false);
+      }
+
     } catch (err: any) {
       console.error(err);
       alert(`Terjadi kesalahan: ${err.message}`);
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -268,205 +297,167 @@ export default function DonationFormPage({ params }: { params: DonationPageParam
   }
 
   return (
-    <div className="bg-gray-50 min-h-screen py-8 md:py-12 px-4">
-      <div className="container mx-auto max-w-6xl grid md:grid-cols-2 shadow-2xl rounded-2xl overflow-hidden min-h-[90vh] bg-white">
-        
-        <div className="relative hidden md:block bg-blue-50">
-          <Image
-            src="/login.jpg"
-            alt="Ilustrasi Donasi"
-            fill
-            style={{ objectFit: 'cover' }}
-            priority
-            onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/600x800?text=Donasi'; }}
-          />
-        </div>
+    <>
+      {/* --- LOAD SCRIPT MIDTRANS DI SINI --- */}
+      <Script 
+        src={process.env.NEXT_PUBLIC_MIDTRANS_SNAP_URL} 
+        data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY} 
+        strategy="lazyOnload"
+      />
 
-        <div className="bg-white p-8 md:p-10 lg:p-12 overflow-y-auto">
-          {isSubmitting && (
-             <div className="absolute inset-0 bg-white bg-opacity-80 z-50 flex flex-col items-center justify-center">
-                <Loader2 className="h-12 w-12 animate-spin text-blue-600 mb-4" />
-                <p className="text-lg font-semibold text-gray-700">Memproses donasi Anda...</p>
-             </div>
-          )}
+      <div className="bg-gray-50 min-h-screen py-8 md:py-12 px-4">
+        <div className="container mx-auto max-w-6xl grid md:grid-cols-2 shadow-2xl rounded-2xl overflow-hidden min-h-[90vh] bg-white">
+            
+            <div className="relative hidden md:block bg-blue-50">
+                <Image
+                  src="/login.jpg"
+                  alt="Ilustrasi Donasi"
+                  fill
+                  style={{ objectFit: 'cover' }}
+                  priority
+                  onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/600x800?text=Donasi'; }}
+                />
+            </div>
 
-          {donationStep === 'initialForm' && (
-            <form onSubmit={handleInitialSubmit} className="w-full">
-              <h1 className="mb-6 text-3xl font-bold text-gray-900">Formulir Donasi</h1>
-              
-              <div className="mb-6 border-b pb-6">
-                <p className="text-sm font-medium text-gray-700 mb-2">Donasi sebagai:</p>
-                <p className="rounded-md border border-gray-200 bg-gray-50 p-3 mb-2"><strong>{user?.nama}</strong></p>
-                <div className="flex items-center">
-                  <input type="checkbox" id="samarkan" checked={samarkanNama} onChange={(e) => setSamarkanNama(e.target.checked)} className="h-4 w-4 text-blue-600" />
-                  <label htmlFor="samarkan" className="ml-2 text-sm text-gray-600">Samarkan nama saya (Anonymous)</label>
-                </div>
-              </div>
-
-              <div className="mb-6">
-                <h2 className="mb-4 text-xl font-semibold">Jenis Donasi</h2>
-                <div className="flex space-x-4">
-                  <label className="flex-1 cursor-pointer">
-                    <input type="radio" name="donationType" value="uang" checked={donationType === 'uang'} onChange={() => setDonationType('uang')} className="peer sr-only" />
-                    <div className={`rounded-lg border-2 p-4 text-center transition ${donationType === 'uang' ? 'border-blue-600 bg-blue-50 text-blue-700 font-bold' : 'border-gray-300 text-gray-600'}`}>Uang</div>
-                  </label>
-                  <label className="flex-1 cursor-pointer">
-                    <input type="radio" name="donationType" value="barang" checked={donationType === 'barang'} onChange={() => setDonationType('barang')} className="peer sr-only" />
-                    <div className={`rounded-lg border-2 p-4 text-center transition ${donationType === 'barang' ? 'border-blue-600 bg-blue-50 text-blue-700 font-bold' : 'border-gray-300 text-gray-600'}`}>Barang</div>
-                  </label>
-                </div>
-              </div>
-
-              {donationType === 'uang' && (
-                <div>
-                  <label className="mb-2 block text-lg font-medium text-gray-700">Jumlah Nominal (Rp)</label>
-                  <input type="number" value={nominal} onChange={(e) => setNominal(e.target.value)} className="w-full rounded-md border p-3 text-lg focus:ring-blue-500" placeholder="Contoh: 50000" required />
-                </div>
-              )}
-              {donationType === 'barang' && (
-                <div>
-                  <h3 className="mb-2 text-lg font-medium text-gray-700">Detail Barang</h3>
-                  {goods.map((good, index) => (
-                    <div key={good.id} className="mb-4 flex items-center gap-2">
-                      <input type="text" placeholder={`Jenis Barang ${index + 1}`} value={good.jenis} onChange={(e) => handleGoodChange(good.id, 'jenis', e.target.value)} className="flex-grow rounded-md border p-2" required />
-                      <input type="text" placeholder="Jumlah" value={good.jumlah} onChange={(e) => handleGoodChange(good.id, 'jumlah', e.target.value)} className="w-1/3 rounded-md border p-2" required />
-                      {goods.length > 1 && <button type="button" onClick={() => handleRemoveGood(good.id)} className="text-red-500 p-1"><Trash2 size={20} /></button>}
+            <div className="bg-white p-8 md:p-10 lg:p-12 overflow-y-auto relative">
+                {isSubmitting && (
+                    <div className="absolute inset-0 bg-white bg-opacity-90 z-50 flex flex-col items-center justify-center">
+                        <Loader2 className="h-12 w-12 animate-spin text-blue-600 mb-4" />
+                        <p className="text-lg font-semibold text-gray-700">
+                            {donationType === 'uang' ? 'Menyiapkan pembayaran...' : 'Memproses donasi...'}
+                        </p>
                     </div>
-                  ))}
-                  <button type="button" onClick={handleAddGood} className="text-sm font-medium text-blue-600 hover:underline">+ Tambah Barang</button>
-                </div>
-              )}
-              
-              <button type="submit" disabled={!donationType} className={`mt-8 w-full rounded-full py-3 text-lg font-bold text-white transition ${!donationType ? 'bg-gray-300' : 'bg-blue-600 hover:bg-blue-700'}`}>Lanjut ke Konfirmasi</button>
-            </form>
-          )}
+                )}
 
-          {donationStep === 'donationConfirmation' && (
-              <div className="w-full">
-                  <h2 className="mb-6 text-2xl font-bold text-gray-900 text-center">Konfirmasi Donasi</h2>
-                  <div className="mb-6 space-y-3 rounded-md border p-4 bg-gray-50">
-                      <p><strong>Nama:</strong> {samarkanNama ? 'Anonymous' : user?.nama}</p>
-                      <p><strong>Jenis:</strong> {donationType === 'uang' ? 'Uang' : 'Barang'}</p>
-                      {donationType === 'uang' && <p><strong>Nominal:</strong> Rp {parseInt(nominal).toLocaleString('id-ID')}</p>}
-                      {donationType === 'barang' && (
-                        <ul className="list-disc list-inside ml-4">
-                            {goods.map(g => <li key={g.id}>{g.jenis} ({g.jumlah})</li>)}
-                        </ul>
-                      )}
-                  </div>
-                  <div className="flex gap-4">
-                      <button onClick={() => setDonationStep('initialForm')} className="flex-1 rounded-full border border-gray-300 py-3">Kembali</button>
-                      <button onClick={handleConfirmationSubmit} className="flex-1 rounded-full bg-blue-600 py-3 font-bold text-white">Lanjut</button>
-                  </div>
-              </div>
-          )}
+                {/* STEP 1 */}
+                {donationStep === 'initialForm' && (
+                    <form onSubmit={handleInitialSubmit} className="w-full">
+                        <h1 className="mb-6 text-3xl font-bold text-gray-900">Formulir Donasi</h1>
+                        <p className="mb-4 text-gray-600">Donatur: <strong>{user?.nama}</strong></p>
+                        
+                        {/* Jenis Donasi */}
+                        <div className="flex gap-4 mb-6">
+                            <label className={`flex-1 cursor-pointer border-2 p-4 rounded-lg text-center ${donationType === 'uang' ? 'border-blue-600 bg-blue-50' : 'border-gray-200'}`}>
+                                <input type="radio" name="type" value="uang" checked={donationType === 'uang'} onChange={() => setDonationType('uang')} className="hidden"/> Uang
+                            </label>
+                            <label className={`flex-1 cursor-pointer border-2 p-4 rounded-lg text-center ${donationType === 'barang' ? 'border-blue-600 bg-blue-50' : 'border-gray-200'}`}>
+                                <input type="radio" name="type" value="barang" checked={donationType === 'barang'} onChange={() => setDonationType('barang')} className="hidden"/> Barang
+                            </label>
+                        </div>
 
-          {donationStep === 'deliveryOptions' && (
-              <form onSubmit={handleDeliverySubmit} className="w-full">
-                 <h2 className="mb-6 text-2xl font-bold text-gray-900">Metode Pengiriman</h2>
-                 <div className="space-y-4 mb-6">
-                     <label className={`flex items-center cursor-pointer rounded-lg border-2 p-4 ${deliveryMethod === 'self' ? 'border-blue-600 bg-blue-50' : 'border-gray-200'}`}>
-                         <input type="radio" name="deliveryMethod" value="self" checked={deliveryMethod === 'self'} onChange={() => setDeliveryMethod('self')} className="h-5 w-5 text-blue-600"/>
-                          <span className="ml-3 text-lg font-medium">Antar Sendiri (Self Delivery)</span>
-                     </label>
-                     <label className={`flex items-center cursor-pointer rounded-lg border-2 p-4 ${deliveryMethod === 'pickup' ? 'border-blue-600 bg-blue-50' : 'border-gray-200'}`}>
-                         <input type="radio" name="deliveryMethod" value="pickup" checked={deliveryMethod === 'pickup'} onChange={() => setDeliveryMethod('pickup')} className="h-5 w-5 text-blue-600"/>
-                          <span className="ml-3 text-lg font-medium">Minta Dijemput (Pick-Up)</span>
-                     </label>
-                 </div>
-                 <button type="submit" className="w-full rounded-full bg-blue-600 py-3 font-bold text-white">Selanjutnya</button>
-                 <button type="button" onClick={() => setDonationStep('donationConfirmation')} className="mt-4 w-full text-center text-sm text-gray-600 hover:underline">Kembali</button>
-              </form>
-          )}
+                        {donationType === 'uang' && (
+                            <div className="mb-6">
+                                <label className="block mb-2 font-medium">Nominal (Rp)</label>
+                                <input type="number" value={nominal} onChange={(e) => setNominal(e.target.value)} className="w-full border p-3 rounded-lg" placeholder="Contoh: 50000" required />
+                            </div>
+                        )}
 
-          {/* --- STEP 4: DETAIL PENJEMPUTAN (TELAH DIPERBAIKI) --- */}
-          {donationStep === 'pickupDetails' && (
-              <form onSubmit={handlePickupSubmit} className="w-full">
-                 <h2 className="mb-6 text-2xl font-bold text-gray-900">Detail Penjemputan</h2>
-                 <div className="space-y-4 mb-6">
-                     <div>
-                         <label className="mb-1 block text-sm font-medium text-gray-700">Alamat Lengkap</label>
-                          <textarea rows={3} value={pickupAddress} onChange={(e) => setPickupAddress(e.target.value)} className="w-full rounded-md border p-2 focus:border-blue-600" placeholder="Jl. Contoh No. 123..." required />
-                     </div>
-                      
-                      {/* --- PERUBAHAN UTAMA: DROPDOWN TANGGAL --- */}
-                      <div>
-                         <label className="mb-1 block text-sm font-medium text-gray-700">Pilih Tanggal Penjemputan</label>
-                         <select 
-                            value={pickupDate} 
-                            onChange={(e) => setPickupDate(e.target.value)} 
-                            className="w-full rounded-md border p-2 bg-white focus:border-blue-600" 
-                            required
-                         >
+                        {donationType === 'barang' && (
+                            <div className="mb-6">
+                                <label className="block mb-2 font-medium">Detail Barang</label>
+                                {goods.map((g, i) => (
+                                    <div key={g.id} className="flex gap-2 mb-2">
+                                        <input placeholder="Jenis" value={g.jenis} onChange={(e) => handleGoodChange(g.id, 'jenis', e.target.value)} className="flex-1 border p-2 rounded" required/>
+                                        <input placeholder="Jml" value={g.jumlah} onChange={(e) => handleGoodChange(g.id, 'jumlah', e.target.value)} className="w-1/3 border p-2 rounded" required/>
+                                        {goods.length > 1 && <button type="button" onClick={() => handleRemoveGood(g.id)} className="text-red-500 p-1"><Trash2 size={20} /></button>}
+                                    </div>
+                                ))}
+                                <button type="button" onClick={handleAddGood} className="text-blue-600 text-sm">+ Tambah</button>
+                            </div>
+                        )}
+
+                        <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-full font-bold hover:bg-blue-700 transition">
+                            {/* Text tombol berubah sesuai jenis donasi */}
+                            {donationType === 'uang' ? 'Bayar Sekarang' : 'Lanjut'}
+                        </button>
+                    </form>
+                )}
+
+                {/* STEP BARANG: KONFIRMASI */}
+                {donationStep === 'donationConfirmation' && (
+                    <div className="space-y-6">
+                        <h2 className="text-2xl font-bold text-center">Konfirmasi Barang</h2>
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                            <ul className="list-disc ml-5">
+                                {goods.map(g => <li key={g.id}>{g.jenis} ({g.jumlah})</li>)}
+                            </ul>
+                        </div>
+                        <div className="flex gap-4">
+                            <button onClick={() => setDonationStep('initialForm')} className="flex-1 border py-3 rounded-full">Kembali</button>
+                            <button onClick={handleConfirmationSubmit} className="flex-1 bg-blue-600 text-white py-3 rounded-full">Lanjut</button>
+                        </div>
+                    </div>
+                )}
+
+                {/* STEP BARANG: METODE KIRIM */}
+                {donationStep === 'deliveryOptions' && (
+                    <form onSubmit={handleDeliverySubmit} className="space-y-6">
+                        <h2 className="text-2xl font-bold">Pengiriman</h2>
+                        <div className="space-y-3">
+                            <label className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer ${deliveryMethod === 'self' ? 'border-blue-600 bg-blue-50' : ''}`}>
+                                <input type="radio" name="del" value="self" checked={deliveryMethod === 'self'} onChange={() => setDeliveryMethod('self')} /> Antar Sendiri
+                            </label>
+                            <label className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer ${deliveryMethod === 'pickup' ? 'border-blue-600 bg-blue-50' : ''}`}>
+                                <input type="radio" name="del" value="pickup" checked={deliveryMethod === 'pickup'} onChange={() => setDeliveryMethod('pickup')} /> Pick-up
+                            </label>
+                        </div>
+                        <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-full font-bold">Selanjutnya</button>
+                        <button type="button" onClick={() => setDonationStep('donationConfirmation')} className="mt-4 w-full text-center text-sm text-gray-600 hover:underline">Kembali</button>
+                    </form>
+                )}
+
+                {/* STEP BARANG: PICKUP DETAIL (DENGAN DROPDOWN TANGGAL) */}
+                {donationStep === 'pickupDetails' && (
+                    <form onSubmit={handlePickupSubmit} className="space-y-4">
+                        <h2 className="text-2xl font-bold">Detail Penjemputan</h2>
+                        <textarea placeholder="Alamat Lengkap" value={pickupAddress} onChange={(e) => setPickupAddress(e.target.value)} className="w-full border p-3 rounded-lg" required />
+                        
+                        <select value={pickupDate} onChange={(e) => setPickupDate(e.target.value)} className="w-full border p-3 rounded-lg bg-white" required>
                             <option value="" disabled>-- Pilih Tanggal (Senin/Rabu/Jumat) --</option>
-                            {availableDates.map((date) => (
-                              <option key={formatDateValue(date)} value={formatDateValue(date)}>
-                                {formatDateDisplay(date)}
-                              </option>
+                            {availableDates.map(date => (
+                                <option key={formatDateValue(date)} value={formatDateValue(date)}>{formatDateDisplay(date)}</option>
                             ))}
-                         </select>
-                         <p className="text-xs text-gray-500 mt-1">Penjemputan hanya tersedia hari Senin, Rabu, dan Jumat.</p>
-                      </div>
+                        </select>
 
-                      <div>
-                         <label className="mb-1 block text-sm font-medium text-gray-700">Pilih Waktu</label>
-                          <select value={pickupTimeSlot} onChange={(e) => setPickupTimeSlot(e.target.value)} className="w-full rounded-md border p-2 bg-white focus:border-blue-600" required>
-                             <option value="" disabled>-- Pilih Waktu --</option>
-                              {PICKUP_TIMES.map(time => <option key={time} value={time}>{time}</option>)}
-                          </select>
-                      </div>
-                 </div>
-                 <button type="submit" className="w-full rounded-full bg-blue-600 py-3 font-bold text-white">Konfirmasi Penjemputan</button>
-                 <button type="button" onClick={() => setDonationStep('deliveryOptions')} className="mt-4 w-full text-center text-sm text-gray-600 hover:underline">Kembali</button>
-              </form>
-          )}
+                        <select value={pickupTimeSlot} onChange={(e) => setPickupTimeSlot(e.target.value)} className="w-full border p-3 rounded-lg bg-white" required>
+                            <option value="" disabled>-- Pilih Jam --</option>
+                            {PICKUP_TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
 
-          {donationStep === 'paymentOptions' && (
-              <form onSubmit={handlePaymentSubmit} className="w-full">
-                 <h2 className="mb-6 text-2xl font-bold text-gray-900">Pilih Metode Pembayaran</h2>
-                 <div className="space-y-3 mb-6">
-                     {(['ewallet', 'va', 'qris'] as PaymentMethod[]).map((method) => (
-                         <label key={method} className={`flex items-center cursor-pointer rounded-lg border-2 p-4 ${paymentMethod === method ? 'border-blue-600 bg-blue-50' : 'border-gray-200'}`}>
-                              <input type="radio" name="paymentMethod" value={method!} checked={paymentMethod === method} onChange={() => setPaymentMethod(method)} className="h-5 w-5 text-blue-600" />
-                              <span className="ml-3 text-lg font-medium capitalize">{method === 'ewallet' ? 'E-Wallet' : method === 'va' ? 'Virtual Account' : 'QRIS'}</span>
-                         </label>
-                     ))}
-                 </div>
-                 <button type="submit" className="w-full rounded-full bg-blue-600 py-3 font-bold text-white">Lanjut ke Pembayaran</button>
-                 <button type="button" onClick={() => setDonationStep('donationConfirmation')} className="mt-4 w-full text-center text-sm text-gray-600 hover:underline">Kembali</button>
-              </form>
-          )}
+                        <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-full font-bold">Konfirmasi Penjemputan</button>
+                        <button type="button" onClick={() => setDonationStep('deliveryOptions')} className="mt-4 w-full text-center text-sm text-gray-600 hover:underline">Kembali</button>
+                    </form>
+                )}
 
-          {donationStep === 'finalSummary' && (
-              <div className="w-full text-center">
-                 <h2 className="mb-4 text-3xl font-bold text-green-600">Terima Kasih! 🙏</h2>
-                 <p className="text-xl text-gray-700 font-medium mb-6">Donasi Anda telah berhasil dicatat.</p>
-                 
-                 <div className="bg-green-50 p-6 rounded-xl border border-green-100 mb-8 text-left">
-                    <h3 className="font-bold text-lg text-green-800 mb-2">Ringkasan:</h3>
-                    {donationType === 'uang' && <p>Transfer: <strong>Rp {parseInt(nominal).toLocaleString('id-ID')}</strong> via {paymentMethod?.toUpperCase()}</p>}
-                    {donationType === 'barang' && deliveryMethod === 'self' && <p>Silakan antar ke alamat yayasan kami.</p>}
-                    {donationType === 'barang' && deliveryMethod === 'pickup' && (
-                           <div className="text-gray-700">
-                               <p>Penjemputan dijadwalkan pada:</p>
-                               <div className="mt-2 p-3 bg-white rounded border border-gray-200">
-                                   <p><strong>Tanggal:</strong> {pickupDate ? formatDateDisplay(new Date(pickupDate)) : '-'}</p>
-                                   <p><strong>Jam:</strong> {pickupTimeSlot}</p>
-                                   <p><strong>Alamat:</strong> {pickupAddress}</p>
-                               </div>
-                           </div>
-                    )}
-                 </div>
-                 
-                 <div className="space-y-3">
-                    <Link href="/history" className="block w-full rounded-full bg-blue-600 py-3 font-bold text-white text-center hover:bg-blue-700">Lihat Riwayat Donasi Saya</Link>
-                    <button onClick={() => router.push('/')} className="block w-full rounded-full border border-gray-300 py-3 font-medium text-gray-700 hover:bg-gray-100">Kembali ke Beranda</button>
-                 </div>
-              </div>
-          )}
+                {/* STEP FINAL (Disesuaikan untuk Uang/Barang) */}
+                {donationStep === 'finalSummary' && (
+                    <div className="text-center space-y-6">
+                        <h2 className="text-3xl font-bold text-green-600">Terima Kasih! 🙏</h2>
+                        <p className="text-xl text-gray-700 font-medium mb-6">
+                             {donationType === 'uang' 
+                                ? 'Transaksi Anda sedang diproses.' 
+                                : 'Donasi barang berhasil dicatat.'}
+                        </p>
+                        
+                        {donationType === 'uang' && (
+                            <p className="text-gray-600 mb-6">
+                                Silakan selesaikan pembayaran di popup yang muncul. Status donasi akan otomatis berubah menjadi <strong>Diterima</strong> setelah pembayaran sukses.
+                            </p>
+                        )}
+
+                        <div className="space-y-3">
+                            <Link href="/history" className="block w-full rounded-full bg-blue-600 py-3 font-bold text-white hover:bg-blue-700">
+                                Cek Status Donasi
+                            </Link>
+                            <button onClick={() => router.push('/')} className="block w-full rounded-full border border-gray-300 py-3 font-medium text-gray-700 hover:bg-gray-100">
+                                Kembali ke Beranda
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
-        
       </div>
-    </div>
+    </>
   )
 }

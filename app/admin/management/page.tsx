@@ -1,27 +1,25 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Eye, Loader2, Search, X } from 'lucide-react'
+import { Eye, Loader2, Search, X, CreditCard } from 'lucide-react' // Tambah CreditCard
 
-// Disesuaikan dengan backend Supabase (RPC get_donations_admin)
 interface DonationRow {
-  id_donasi: number;       // Diganti dari id_layanan
+  id_donasi: number;
   nama_donatur: string;
   nama_program: string | null;
-  jenis_donasi: 'Uang' | 'Barang'; // Perhatikan huruf besar 'U' dan 'B' sesuai enum DB
+  jenis_donasi: 'Uang' | 'Barang';
   nominal: number | null;
   nama_barang: string | null;
-  status: 'Pending' | 'Diterima' | 'Ditolak'; // Enum DB
+  metode_pembayaran: string | null; // <-- Kolom Baru dari API
+  status: 'Pending' | 'Diterima' | 'Ditolak';
   created_at: string;
 }
 
-// Untuk filter
 interface Program {
   id_kegiatan: number;
   nama_program: string;
 }
 
-// Hook debounce
 function useDebounce(value: string, delay: number) {
   const [debouncedValue, setDebouncedValue] = useState(value);
   useEffect(() => {
@@ -41,14 +39,12 @@ export default function DonationManagementPage() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  // Status Filter (menggunakan nilai yang sesuai dengan DB)
-  const [filterStatus, setFilterStatus] = useState(''); // 'Pending', 'Diterima', 'Ditolak'
+  const [filterStatus, setFilterStatus] = useState('');
   const [filterProgram, setFilterProgram] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounce(searchQuery, 500);
   const [programsList, setProgramsList] = useState<Program[]>([]);
 
-  // State Modal (disederhanakan untuk demo, detail bisa diambil lagi jika perlu)
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedDonation, setSelectedDonation] = useState<DonationRow | null>(null);
 
@@ -57,7 +53,6 @@ export default function DonationManagementPage() {
       const res = await fetch('/api/admin/programs');
       if (!res.ok) throw new Error('Gagal memuat program');
       const data = await res.json();
-      // Map data backend ke interface Program
       setProgramsList(data.map((p: any) => ({
         id_kegiatan: p.id_kegiatan,
         nama_program: p.nama_program
@@ -102,7 +97,6 @@ export default function DonationManagementPage() {
   const handleViewDetail = (don: DonationRow) => {
      setSelectedDonation(don);
      setShowDetailModal(true);
-     // Jika perlu data lebih detail (misal: bukti transfer), bisa fetch lagi ke endpoint detail
   };
 
   const renderDonationDetails = (donation: DonationRow) => {
@@ -195,6 +189,10 @@ export default function DonationManagementPage() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID Donasi</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama Donatur</th>
+                
+                {/* Kolom Baru: Metode */}
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Metode</th>
+                
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jenis Donasi</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Detail (Preview)</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -207,6 +205,18 @@ export default function DonationManagementPage() {
                   <tr key={don.id_donasi}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">#{don.id_donasi}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{don.nama_donatur}</td>
+                    
+                    {/* Isi Kolom Metode */}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {don.metode_pembayaran === 'Midtrans' ? (
+                            <span className="flex items-center gap-1 text-blue-600 font-semibold">
+                                <CreditCard size={16}/> Otomatis
+                            </span>
+                        ) : (
+                            <span className="text-gray-600">{don.metode_pembayaran || 'Manual'}</span>
+                        )}
+                    </td>
+
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 capitalize">{don.jenis_donasi}</td>
                     <td className="px-6 py-4 text-sm text-gray-700 max-w-xs truncate">{renderDonationDetails(don)}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -227,7 +237,7 @@ export default function DonationManagementPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
                     Tidak ada data donasi yang cocok dengan filter.
                   </td>
                 </tr>
@@ -237,6 +247,7 @@ export default function DonationManagementPage() {
         </div>
       )}
 
+      {/* Modal Detail */}
       {showDetailModal && selectedDonation && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg relative">
@@ -247,20 +258,22 @@ export default function DonationManagementPage() {
               <X size={24} />
             </button>
             <h2 className="text-xl font-bold mb-4 border-b pb-2">Detail Donasi #{selectedDonation.id_donasi}</h2>
-            
              <div className="space-y-2 text-sm mb-4">
                 <p><strong>Nama Donatur:</strong> {selectedDonation.nama_donatur}</p>
                 <p><strong>Jenis Donasi:</strong> {selectedDonation.jenis_donasi}</p>
+                
+                {/* Tampilkan Metode di Modal juga */}
+                <p><strong>Metode:</strong> {selectedDonation.metode_pembayaran || 'Manual'}</p>
+                
                 {selectedDonation.jenis_donasi === 'Uang' && (
-                     <p><strong>Nominal:</strong> Rp {Number(selectedDonation.nominal).toLocaleString('id-ID')}</p>
+                    <p><strong>Nominal:</strong> Rp {Number(selectedDonation.nominal).toLocaleString('id-ID')}</p>
                 )}
                 {selectedDonation.jenis_donasi === 'Barang' && (
-                     <p><strong>Detail Barang:</strong> {selectedDonation.nama_barang}</p>
+                    <p><strong>Detail Barang:</strong> {selectedDonation.nama_barang}</p>
                 )}
                 <p><strong>Program:</strong> {selectedDonation.nama_program || '-'}</p>
                 <p><strong>Status:</strong> <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${getStatusColor(selectedDonation.status)}`}>{selectedDonation.status}</span></p>
              </div>
-
              <button
                 onClick={() => setShowDetailModal(false)}
                 className="mt-6 w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg"

@@ -18,7 +18,13 @@ export default function PengeluaranDana({ programId }: { programId: string }) {
   useEffect(() => {
     const fetchExpenses = async () => {
       try {
-        const res = await fetch(`/api/public/expenses/${programId}`);
+        // UPDATE: Tambahkan timestamp (?t=...) dan cache: 'no-store'
+        // Ini memaksa browser mengambil data terbaru dari server setiap kali dibuka
+        const res = await fetch(`/api/public/expenses/${programId}?t=${new Date().getTime()}`, {
+            cache: 'no-store',
+            next: { revalidate: 0 }
+        });
+
         if (res.ok) {
           const data = await res.json();
           setExpenses(data);
@@ -31,6 +37,11 @@ export default function PengeluaranDana({ programId }: { programId: string }) {
     };
 
     fetchExpenses();
+    
+    // Opsional: Auto-refresh setiap 10 detik agar data selalu live
+    const interval = setInterval(fetchExpenses, 10000);
+    return () => clearInterval(interval);
+
   }, [programId]);
 
   const totalExpenses = expenses
@@ -38,10 +49,12 @@ export default function PengeluaranDana({ programId }: { programId: string }) {
     .reduce((acc, curr) => acc + (curr.nominal || 0), 0);
 
   return (
-    <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+    <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden h-full">
       <div className="bg-red-50 p-4 border-b border-red-100 flex justify-between items-center">
-        <h3 className="text-lg font-bold text-red-800">Penggunaan Dana</h3>
-        <div className="text-sm font-medium text-red-600 bg-white px-3 py-1 rounded-full border border-red-100">
+        <h3 className="text-lg font-bold text-red-800 flex items-center gap-2">
+           <TrendingDown size={20}/> Penggunaan Dana
+        </h3>
+        <div className="text-xs font-medium text-red-600 bg-white px-3 py-1 rounded-full border border-red-100">
           Total: Rp {totalExpenses.toLocaleString('id-ID')}
         </div>
       </div>
@@ -56,24 +69,24 @@ export default function PengeluaranDana({ programId }: { programId: string }) {
             {expenses.map((e) => (
               <li key={e.id_pengeluaran} className="p-4 hover:bg-gray-50 transition">
                 <div className="flex justify-between items-start mb-1">
-                  <p className="font-semibold text-gray-800 flex-1">{e.deskripsi}</p>
-                  <span className="text-xs text-gray-400 ml-2 whitespace-nowrap">
+                  <p className="font-semibold text-gray-800 flex-1 text-sm">{e.deskripsi}</p>
+                  <span className="text-xs text-gray-400 ml-2 whitespace-nowrap shrink-0">
                     {new Date(e.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </span>
                 </div>
                 
                 <div className="flex items-center justify-between mt-2">
-                   <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <FileText size={16} className="text-gray-400"/>
+                   <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <FileText size={14} className="text-gray-400"/>
                       <span className="capitalize">{e.type}</span>
                    </div>
                    
                    {e.type === 'uang' ? (
-                      <span className="font-bold text-red-600 bg-red-50 px-2 py-1 rounded text-sm">
+                      <span className="font-bold text-red-600 bg-red-50 px-2 py-1 rounded text-xs">
                         - Rp {Number(e.nominal).toLocaleString('id-ID')}
                       </span>
                    ) : (
-                      <span className="font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded text-sm truncate max-w-[150px]">
+                      <span className="font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded text-xs truncate max-w-[120px]" title={e.item_details || ''}>
                         {e.item_details}
                       </span>
                    )}

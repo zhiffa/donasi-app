@@ -18,7 +18,12 @@ export default function DonasiMasuk({ programId }: { programId: string }) {
   useEffect(() => {
     const fetchDonations = async () => {
       try {
-        const res = await fetch(`/api/public/donations/${programId}`);
+        // Tambahkan timestamp agar URL unik & tidak di-cache browser
+        const res = await fetch(`/api/public/donations/${programId}?t=${new Date().getTime()}`, {
+            cache: 'no-store', // PERBAIKAN: Paksa ambil data baru
+            next: { revalidate: 0 }
+        });
+        
         if (res.ok) {
           const data = await res.json();
           setDonations(data);
@@ -34,7 +39,7 @@ export default function DonasiMasuk({ programId }: { programId: string }) {
   }, [programId]);
 
   return (
-    <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+    <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden h-full">
       <div className="bg-blue-50 p-4 border-b border-blue-100">
         <h3 className="text-lg font-bold text-blue-800 flex items-center gap-2">
           <span className="bg-blue-200 text-blue-700 py-1 px-2 rounded text-xs">{donations.length}</span>
@@ -51,26 +56,26 @@ export default function DonasiMasuk({ programId }: { programId: string }) {
           <ul className="divide-y divide-gray-100">
             {donations.map((d) => (
               <li key={d.id} className="p-4 hover:bg-gray-50 transition flex items-center gap-4">
-                <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
+                <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 shrink-0">
                   <User size={20} />
                 </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-gray-900">{d.nama}</p>
+                <div className="flex-1 min-w-0"> {/* min-w-0 agar truncate bekerja */}
+                  <p className="font-semibold text-gray-900 truncate">{d.nama}</p>
                   <p className="text-xs text-gray-500">
                     {new Date(d.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
                   </p>
                 </div>
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   {d.jenis === 'Uang' ? (
                     <span className="font-bold text-green-600 block">
                       + Rp {Number(d.nominal).toLocaleString('id-ID')}
                     </span>
                   ) : (
-                    <span className="font-bold text-orange-600 block text-sm max-w-[150px] truncate">
+                    <span className="font-bold text-orange-600 block text-sm max-w-[120px] truncate text-right" title={d.barang || ''}>
                       {d.barang}
                     </span>
                   )}
-                  <span className="text-xs text-gray-400 uppercase">{d.jenis}</span>
+                  <span className="text-[10px] text-gray-400 uppercase bg-gray-100 px-1 rounded">{d.jenis}</span>
                 </div>
               </li>
             ))}

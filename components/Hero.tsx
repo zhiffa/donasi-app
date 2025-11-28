@@ -18,6 +18,9 @@ export default function Hero() {
           Shine in Smiles
         </h1>
         <p className="mb-8 text-lg md:text-xl">
+         By Yayasan Abhimata
+        </p>
+        <p className="mb-8 text-lg md:text-xl">
           A space that brings light to those in need.
         </p>
         <Link 
