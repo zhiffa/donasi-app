@@ -9,6 +9,7 @@ interface ProgramFormData {
   name: string;
   description: string;
   startDate: string;
+  targetDana: string;
 }
 
 export default function NewProgramPage() {
@@ -17,6 +18,7 @@ export default function NewProgramPage() {
     name: '',
     description: '',
     startDate: '',
+    targetDana: '',
   });
   
   const [file, setFile] = useState<File | null>(null);
@@ -61,6 +63,8 @@ export default function NewProgramPage() {
       data.append('name', formData.name);
       data.append('description', formData.description);
       data.append('startDate', formData.startDate);
+      data.append('targetDana', formData.targetDana);
+      
       if (file) {
         data.append('poster', file); 
       }
@@ -86,10 +90,15 @@ export default function NewProgramPage() {
     }
   };
 
+  const formatRupiahPreview = (val: string) => {
+    if (!val) return 'Rp 0';
+    return `Rp ${Number(val).toLocaleString('id-ID')}`;
+  };
+
   return (
     <div className="bg-white p-6 rounded-lg shadow-md max-w-2xl mx-auto">
       <div className="flex items-center gap-4 mb-6">
-         <Link
+          <Link
             href="/admin/programs"
             className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100"
           >
@@ -101,62 +110,53 @@ export default function NewProgramPage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         
         <div>
-          <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-            Nama Program
-          </label>
+          <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Nama Program</label>
           <input
             type="text" id="name" name="name"
             value={formData.name} onChange={handleChange}
-            className="w-full rounded-md border-gray-300 py-2 px-3 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            className="w-full rounded-md border-gray-300 py-2 px-3 focus:border-blue-500 focus:ring-blue-500 sm:text-sm border"
             placeholder="Contoh: Bantu Pendidikan Anak" required
           />
         </div>
 
         <div>
-          <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">
-            Tanggal Mulai
-          </label>
+          <label htmlFor="targetDana" className="block text-sm font-medium text-gray-700 mb-1">Target Dana (Rp)</label>
+          <input
+            type="number" id="targetDana" name="targetDana"
+            value={formData.targetDana} onChange={handleChange}
+            className="w-full rounded-md border-gray-300 py-2 px-3 focus:border-blue-500 focus:ring-blue-500 sm:text-sm border"
+            placeholder="Masukkan nominal angka saja, cth: 10000000" 
+            min="0"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Preview: <span className="font-semibold text-green-600">{formatRupiahPreview(formData.targetDana)}</span>
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">Tanggal Mulai</label>
           <input
             type="date" id="startDate" name="startDate"
             value={formData.startDate} onChange={handleChange}
-            className="w-full rounded-md border-gray-300 py-2 px-3 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            className="w-full rounded-md border-gray-300 py-2 px-3 focus:border-blue-500 focus:ring-blue-500 sm:text-sm border"
             required
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Poster Program (Opsional)
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Poster Program (Opsional)</label>
           <div className="mt-1 flex justify-center rounded-md border-2 border-dashed border-gray-300 px-6 pt-5 pb-6">
             <div className="space-y-1 text-center">
               {preview ? (
-                <Image
-                  src={preview}
-                  alt="Preview poster"
-                  width={200}
-                  height={100}
-                  className="mx-auto h-24 w-auto object-contain rounded"
-                />
+                <Image src={preview} alt="Preview poster" width={200} height={100} className="mx-auto h-24 w-auto object-contain rounded" />
               ) : (
                 <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />
               )}
-              <div className="flex text-sm text-gray-600">
-                <label
-                  htmlFor="poster"
-                  className="relative cursor-pointer rounded-md bg-white font-medium text-blue-600 focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2 hover:text-blue-500"
-                >
+              <div className="flex text-sm text-gray-600 justify-center">
+                <label htmlFor="poster" className="relative cursor-pointer rounded-md bg-white font-medium text-blue-600 focus-within:outline-none hover:text-blue-500">
                   <span>Upload a file</span>
-                  <input
-                    id="poster"
-                    name="poster"
-                    type="file"
-                    className="sr-only"
-                    accept="image/png, image/jpeg, image/webp"
-                    onChange={handleFileChange}
-                  />
+                  <input id="poster" name="poster" type="file" className="sr-only" accept="image/png, image/jpeg, image/webp" onChange={handleFileChange} />
                 </label>
-                <p className="pl-1">atau seret dan lepas</p>
               </div>
               <p className="text-xs text-gray-500">PNG, JPG, WEBP (Maks 2MB)</p>
             </div>
@@ -164,37 +164,20 @@ export default function NewProgramPage() {
         </div>
 
         <div>
-          <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-            Deskripsi (Opsional)
-          </label>
+          <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">Deskripsi (Opsional)</label>
           <textarea
             id="description" name="description" rows={4}
             value={formData.description} onChange={handleChange}
-            className="w-full rounded-md border-gray-300 py-2 px-3 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            className="w-full rounded-md border-gray-300 py-2 px-3 focus:border-blue-500 focus:ring-blue-500 sm:text-sm border"
             placeholder="Jelaskan detail program di sini..."
           />
         </div>
 
-        {error && (
-          <div className="rounded-md bg-red-50 p-3 text-center text-sm text-red-700">
-            {error}
-          </div>
-        )}
+        {error && <div className="rounded-md bg-red-50 p-3 text-center text-sm text-red-700">{error}</div>}
         
         <div className="flex justify-end">
-          <button
-            type="submit"
-            className="flex items-center justify-center gap-2 w-full md:w-auto rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-gray-400"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" />
-                Menyimpan...
-              </>
-            ) : (
-              'Simpan Program'
-            )}
+          <button type="submit" className="flex items-center justify-center gap-2 w-full md:w-auto rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-gray-400" disabled={isSubmitting}>
+            {isSubmitting ? <><Loader2 className="h-5 w-5 animate-spin" /> Menyimpan...</> : 'Simpan Program'}
           </button>
         </div>
 

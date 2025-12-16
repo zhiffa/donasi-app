@@ -15,54 +15,103 @@ export async function GET(
   const donationId = params.id;
 
   try {
-    // 2. Ambil detail donasi + Data Kegiatan + Data Admin Verifikator
-    const { data, error } = await supabase
+    // ---------------------------------------------------------
+    // QUERY 1: Ambil Data Utama Donasi
+    // ---------------------------------------------------------
+    const { data: rawData, error } = await supabase
       .from('donasi')
       .select(`
         *,
         kegiatan ( id_kegiatan, nama_program, url_poster ),
         donatur!inner ( 
             id_user,
-            user ( nama, email, phone ) 
+            no_telp,
+            user ( nama, email ) 
         ),
         admin ( 
             user ( nama ) 
         )
       `)
       .eq('id_donasi', donationId)
-      .eq('donatur.id_user', auth.userId) // Pastikan hanya pemilik donasi yang bisa lihat
+      .eq('donatur.id_user', auth.userId) 
       .single();
 
-    if (error) throw error;
+    if (error) {
+        console.error("DB Error:", error.message);
+        throw error;
+    }
 
-    if (!data) {
+    if (!rawData) {
       return NextResponse.json({ message: 'Donasi tidak ditemukan' }, { status: 404 });
     }
 
-    // 3. Format Data
-    // Data admin/verifikator mungkin null jika belum diverifikasi atau ditolak sistem
-    const adminName = Array.isArray(data.admin) 
-        ? data.admin[0]?.user?.nama 
-        : data.admin?.user?.nama;
+    const d = rawData as any;
+    const unwrap = (val: any) => (Array.isArray(val) ? val[0] : val) || null;
+
+    // ---------------------------------------------------------
+    // QUERY 2: Ambil Jadwal Penjemputan (UPDATED)
+    // ---------------------------------------------------------
+    let jadwalData = null;
+    
+    // PERUBAHAN DISINI: Kita cek jadwal untuk SEMUA donasi Barang.
+    // Karena Self-Delivery yang sudah sampai pun datanya disimpan di tabel jadwal.
+    if (d.jenis_donasi === 'Barang') {
+        const { data: jadwalRes, error: jadwalError } = await supabase
+            .from('jadwal_penjemputan')
+            .select('status_penjemputan, alamat_penjemputan, tanggal_penjemputan, jam_penjemputan')
+            .eq('id_donasi', donationId)
+            .single(); 
+        
+        if (!jadwalError && jadwalRes) {
+            jadwalData = jadwalRes;
+        }
+    }
+
+    // ---------------------------------------------------------
+    // 3. Format Data Akhir
+    // ---------------------------------------------------------
+    const kegiatan = unwrap(d.kegiatan);
+    const donaturRel = unwrap(d.donatur);
+    const adminRel = unwrap(d.admin);
+    
+    const userDonatur = donaturRel ? unwrap(donaturRel.user) : null;
+    const userAdmin = adminRel ? unwrap(adminRel.user) : null;
 
     const formattedData = {
-        ...data,
-        nama_program: data.kegiatan?.nama_program,
-        url_poster: data.kegiatan?.url_poster,
-        nama_donatur: data.donatur?.user?.nama,
-        email_donatur: data.donatur?.user?.email,
-        phone_donatur: data.donatur?.user?.phone,
-        nama_verifikator: adminName || 'Pengurus Yayasan', // Default jika null
-        // Bersihkan nested objects
-        kegiatan: undefined,
-        donatur: undefined,
-        admin: undefined
+        id_donasi: d.id_donasi,
+        id_kegiatan: d.id_kegiatan,
+        created_at: d.created_at,
+        jenis_donasi: d.jenis_donasi,
+        nominal: d.nominal,
+        nama_barang: d.nama_barang,
+        deskripsi_barang: d.deskripsi_barang,
+        status: d.status,
+        rejection_reason: d.rejection_reason,
+        metode_pengiriman: d.metode_pengiriman,
+        nomor_resi: d.nomor_resi,
+        
+        nama_program: kegiatan?.nama_program || 'Program Tidak Diketahui',
+        url_poster: kegiatan?.url_poster || null,
+        
+        nama_donatur: userDonatur?.nama || 'Tanpa Nama',
+        email_donatur: userDonatur?.email || '-',
+        phone_donatur: donaturRel?.no_telp || '-',
+        
+        nama_verifikator: userAdmin?.nama || 'Pengurus Yayasan',
+        
+        // Jadwal sekarang akan terisi walaupun metode = Self-Delivery (jika status sudah Selesai)
+        jadwal: jadwalData ? {
+            status_penjemputan: jadwalData.status_penjemputan || 'Dijadwalkan',
+            alamat_penjemputan: jadwalData.alamat_penjemputan || '-',
+            tanggal_penjemputan: jadwalData.tanggal_penjemputan || null,
+            jam_penjemputan: jadwalData.jam_penjemputan || null
+        } : null
     };
 
     return NextResponse.json(formattedData, { status: 200 });
 
-  } catch (error) {
-    console.error('[HISTORY_DETAIL_BY_ID]', error);
+  } catch (error: any) {
+    console.error('[HISTORY_DETAIL_BY_ID] Error:', error.message);
     return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
   }
 }

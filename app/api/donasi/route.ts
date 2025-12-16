@@ -14,6 +14,10 @@ interface DonationRequestBody {
   pickupAddress?: string;
   pickupDate?: string;
   pickupTimeSlot?: string;
+  // --- Tambahan Data Baru (Maps & Catatan) ---
+  pickupNotes?: string;
+  pickupLat?: number;
+  pickupLng?: number;
 }
 
 export async function POST(request: NextRequest) {
@@ -41,7 +45,8 @@ export async function POST(request: NextRequest) {
     const body: DonationRequestBody = await request.json();
     const {
       programId, samarkanNama, donationType, nominal,
-      goods, deliveryMethod, pickupAddress, pickupDate, pickupTimeSlot
+      goods, deliveryMethod, pickupAddress, pickupDate, pickupTimeSlot,
+      pickupNotes, pickupLat, pickupLng // Ambil data baru dari body
     } = body;
 
     // Persiapan data barang
@@ -56,6 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Simpan ke Database (Status Awal: Pending)
+    // Memanggil RPC 'submit_donation' yang sudah diupdate dengan parameter baru
     const { data: newDonationId, error: rpcError } = await supabase.rpc('submit_donation', {
       p_id_donatur: donaturData.id_donatur,
       p_id_kegiatan: parseInt(programId),
@@ -68,7 +74,11 @@ export async function POST(request: NextRequest) {
       p_metode_pengiriman: donationType === 'barang' ? deliveryMethod : null,
       p_alamat_jemput: pickupAddress || null,
       p_tanggal_jemput: tglJemputISO || null,
-      p_jam_jemput: pickupTimeSlot || null
+      p_jam_jemput: pickupTimeSlot || null,
+      // Parameter Baru
+      p_catatan_donatur: pickupNotes || null,
+      p_latitude: pickupLat || null,
+      p_longitude: pickupLng || null
     });
 
     if (rpcError) throw rpcError;

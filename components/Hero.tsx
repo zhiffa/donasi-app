@@ -14,11 +14,11 @@ export default function Hero() {
       <div className="absolute inset-0 bg-black opacity-40"></div>
       
       <div className="relative z-10 text-center text-white">
-        <h1 className="mb-4 text-5xl font-bold md:text-7xl">
+        <h1 className="mb-0 text-5xl font-bold md:text-7xl leading-tight">
           Shine in Smiles
         </h1>
-        <p className="mb-8 text-lg md:text-xl">
-         By Yayasan Abhimata
+        <p className="mb-6 text-sm font-medium md:text-base opacity-90">
+          By Yayasan Abhimata
         </p>
         <p className="mb-8 text-lg md:text-xl">
           A space that brings light to those in need.

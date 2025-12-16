@@ -1,29 +1,33 @@
-// File: app/api/admin/programs/route.ts
-
-import { NextResponse, type NextRequest } from 'next/server'; // <-- PERBAIKAN: Tambahkan NextRequest
+import { NextResponse, type NextRequest } from 'next/server';
 import { supabase } from '@/lib/supabaseClient'; 
 import { verifyAdmin } from '@/lib/auth';
 
-// --- 1. FUNGSI GET (Mengambil semua kegiatan) ---
-export async function GET(request: NextRequest) { // <-- PERBAIKAN: Ganti Request dengan NextRequest
+// --- 1. FUNGSI GET (Mengambil kegiatan) ---
+export async function GET(request: NextRequest) {
   const auth = await verifyAdmin(request);
 
   if (!auth.isAdmin) {
     return auth.response; 
   }
-  if (auth.jabatan !== 'Admin Program') {
-    return NextResponse.json({ message: 'Akses ditolak: Hanya Admin Program' }, { status: 403 });
+
+  const isAdminProgram = auth.jabatan === 'Admin Program';
+  const isAdminOperasional = auth.jabatan === 'Admin Operasional';
+
+  if (!isAdminProgram && !isAdminOperasional) {
+    return NextResponse.json({ message: 'Akses ditolak' }, { status: 403 });
   }
   
   try {
-    // --- PERUBAHAN KE SUPABASE ---
-    const { data: programs, error } = await supabase
-      .from('kegiatan')
-      .select('*')
-      .order('tanggal_mulai', { ascending: false });
+    let query = supabase.from('kegiatan').select('*');
+
+    // [UBAH] Filter 'Aktif' (bukan Berjalan) untuk dropdown Admin Operasional
+    if (isAdminOperasional && !isAdminProgram) {
+        query = query.eq('status', 'Aktif').select('id_kegiatan, nama_program, status');
+    }
+
+    const { data: programs, error } = await query.order('created_at', { ascending: false });
 
     if (error) throw error;
-    // --- AKHIR PERUBAHAN ---
     
     return NextResponse.json(programs, { status: 200 });
   } catch (error) {
@@ -35,8 +39,8 @@ export async function GET(request: NextRequest) { // <-- PERBAIKAN: Ganti Reques
   }
 }
 
-// --- FUNGSI POST (Membuat kegiatan baru) ---
-export async function POST(request: NextRequest) { // <-- PERBAIKAN: Ganti Request dengan NextRequest
+// --- 2. FUNGSI POST (Membuat kegiatan baru) ---
+export async function POST(request: NextRequest) {
   const auth = await verifyAdmin(request);
 
   if (!auth.isAdmin || !auth.userId) {
@@ -48,7 +52,6 @@ export async function POST(request: NextRequest) { // <-- PERBAIKAN: Ganti Reque
 
   let adminId;
   try {
-    // --- PERUBAHAN KE SUPABASE ---
     const { data: adminData, error: adminError } = await supabase
       .from('admin')
       .select('id_admin')
@@ -59,9 +62,7 @@ export async function POST(request: NextRequest) { // <-- PERBAIKAN: Ganti Reque
         throw new Error('Data admin tidak ditemukan');
     }
     adminId = adminData.id_admin;
-    // --- AKHIR PERUBAHAN ---
   } catch (dbError) {
-     console.error('[KEGIATAN_POST_ADMIN_QUERY]', dbError);
      return NextResponse.json({ message: 'Gagal memverifikasi admin' }, { status: 500 });
   }
   
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest) { // <-- PERBAIKAN: Ganti Reque
     const name = formData.get('name') as string;
     const description = formData.get('description') as string;
     const startDate = formData.get('startDate') as string;
+    const targetDanaInput = formData.get('targetDana'); 
     const posterFile = formData.get('poster') as File | null;
 
     if (!name || !startDate) {
@@ -80,44 +82,42 @@ export async function POST(request: NextRequest) { // <-- PERBAIKAN: Ganti Reque
       );
     }
 
-    // --- LOGIKA UPLOAD FILE (DIGANTI KE SUPABASE STORAGE) ---
-    let posterUrl: string | null = null; 
+    // Parsing Target Dana
+    let targetDana = 0;
+    if (targetDanaInput) {
+        const parsed = parseFloat(targetDanaInput.toString());
+        if (!isNaN(parsed)) targetDana = parsed;
+    }
 
+    // Upload Poster
+    let posterUrl: string | null = null; 
     if (posterFile) {
       try {
         const buffer = Buffer.from(await posterFile.arrayBuffer());
         const safeFilename = posterFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
         const uniqueFilename = `${Date.now()}_${safeFilename}`;
         
-        // 1. Upload ke Supabase Storage (pastikan buat bucket 'posters')
         const { error: uploadError } = await supabase.storage
-          .from('posters') // NAMA BUCKET ANDA
+          .from('posters') 
           .upload(uniqueFilename, buffer, {
             contentType: posterFile.type,
-            upsert: false, // jangan timpa file
+            upsert: false,
           });
 
-        if (uploadError) {
-            console.error('[FILE_UPLOAD_ERROR]', uploadError);
-            throw new Error('Gagal mengunggah poster: ' + uploadError.message);
-        }
+        if (uploadError) throw new Error('Gagal mengunggah poster: ' + uploadError.message);
 
-        // 2. Dapatkan URL publik dari file yang diupload
         const { data: publicUrlData } = supabase.storage
           .from('posters')
           .getPublicUrl(uniqueFilename);
 
         posterUrl = publicUrlData.publicUrl;
-        
       } catch (uploadError) {
         console.error('[FILE_UPLOAD_CATCH]', uploadError);
-        // Gagal upload, tapi lanjutkan tanpa poster
         posterUrl = null; 
       }
     }
-    // --- AKHIR LOGIKA UPLOAD FILE ---
 
-    // --- PERUBAHAN KE SUPABASE ---
+    // [UBAH] Insert status 'Aktif' (bukan Berjalan) agar sesuai ENUM DB
     const { error: insertError } = await supabase
       .from('kegiatan')
       .insert({
@@ -126,24 +126,61 @@ export async function POST(request: NextRequest) { // <-- PERBAIKAN: Ganti Reque
         deskripsi: description || null,
         tanggal_mulai: startDate,
         url_poster: posterUrl,
-        status: 'Aktif'
+        target_dana: targetDana,
+        status: 'Aktif' 
       });
 
-    if (insertError) throw insertError;
-    // --- AKHIR PERUBAHAN ---
+    if (insertError) {
+        console.error('[SUPABASE_INSERT_ERROR]', insertError);
+        throw new Error(insertError.message || 'Gagal menyimpan ke database');
+    }
 
     return NextResponse.json(
       { message: 'Kegiatan berhasil dibuat' },
       { status: 201 }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('[KEGIATAN_POST]', error);
-    
-    // <-- PERBAIKAN: Handle 'unknown' error type dengan aman
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    
+    const errorMessage = error?.message || (typeof error === 'string' ? error : 'Terjadi kesalahan sistem');
     return NextResponse.json(
-      { message: `Internal Server Error: ${errorMessage}` },
+      { message: `Gagal Menyimpan: ${errorMessage}` },
+      { status: 500 }
+    );
+  }
+}
+
+// --- 3. FUNGSI PATCH (Update Status) ---
+export async function PATCH(request: NextRequest) {
+  const auth = await verifyAdmin(request);
+
+  if (!auth.isAdmin) {
+    return auth.response;
+  }
+  if (auth.jabatan !== 'Admin Program') {
+    return NextResponse.json({ message: 'Akses ditolak: Hanya Admin Program' }, { status: 403 });
+  }
+
+  try {
+    const body = await request.json();
+    const { id, status } = body; 
+
+    if (!id || !status) {
+       return NextResponse.json({ message: 'ID Program dan Status baru diperlukan' }, { status: 400 });
+    }
+
+    const { error } = await supabase
+      .from('kegiatan')
+      .update({ status: status }) 
+      .eq('id_kegiatan', id);
+
+    if (error) throw error;
+
+    return NextResponse.json({ message: 'Status program berhasil diperbarui' }, { status: 200 });
+
+  } catch (error) {
+    console.error('[KEGIATAN_PATCH]', error);
+    return NextResponse.json(
+      { message: 'Gagal memperbarui status program' },
       { status: 500 }
     );
   }

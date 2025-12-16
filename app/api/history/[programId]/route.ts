@@ -15,11 +15,15 @@ export async function GET(
 
   try {
     // Ambil satu donasi terbaru user ini untuk program tertentu
+    // UPDATE: Tambahkan jadwal_penjemputan agar MyDonationStatus bisa menampilkan tracking
     const { data, error } = await supabase
       .from('donasi')
       .select(`
         *,
-        donatur!inner ( id_user ) 
+        donatur!inner ( id_user ),
+        jadwal_penjemputan (
+            status_penjemputan
+        )
       `)
       .eq('donatur.id_user', auth.userId)
       .eq('id_kegiatan', parseInt(programId))
@@ -33,10 +37,21 @@ export async function GET(
       return NextResponse.json({ message: 'Donasi tidak ditemukan' }, { status: 404 });
     }
 
-    // Hapus data nested donatur sebelum dikirim
-    const { donatur, ...donationData } = data;
+    // Handle jadwal (array/object)
+    const jadwalData = Array.isArray(data.jadwal_penjemputan) 
+        ? data.jadwal_penjemputan[0] 
+        : data.jadwal_penjemputan;
 
-    return NextResponse.json(donationData, { status: 200 });
+    // Hapus data nested donatur sebelum dikirim
+    const { donatur, jadwal_penjemputan, ...donationData } = data;
+
+    // Gabungkan jadwal ke response utama
+    const finalData = {
+        ...donationData,
+        jadwal: jadwalData || null
+    };
+
+    return NextResponse.json(finalData, { status: 200 });
 
   } catch (error) {
     console.error('[HISTORY_DETAIL_GET]', error);

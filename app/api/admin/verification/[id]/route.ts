@@ -1,10 +1,9 @@
-import { NextResponse, type NextRequest } from 'next/server'; // <-- PERBAIKAN: Tambahkan NextRequest
+import { NextResponse, type NextRequest } from 'next/server';
 import { supabase } from '@/lib/supabaseClient'; 
 import { verifyAdmin } from '@/lib/auth';
 
-// --- FUNGSI PATCH (Menyetujui atau Menolak donasi) ---
 export async function PATCH(
-  request: NextRequest, // <-- PERBAIKAN: Ganti Request dengan NextRequest
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const auth = await verifyAdmin(request);
@@ -18,70 +17,62 @@ export async function PATCH(
 
   const donationId = params.id;
   
+  // 1. Ambil ID Admin
   let adminId;
   try {
-    // --- PERUBAHAN KE SUPABASE ---
     const { data: adminData, error: adminError } = await supabase
       .from('admin')
       .select('id_admin')
       .eq('id_user', auth.userId)
       .single();
       
-    if (adminError || !adminData) {
-        throw new Error('Data admin tidak ditemukan');
-    }
+    if (adminError || !adminData) throw new Error('Data admin tidak ditemukan');
     adminId = adminData.id_admin;
-    // --- AKHIR PERUBAHAN ---
   } catch (dbError) {
-     console.error('[VERIFY_PATCH_ADMIN_QUERY]', dbError);
      return NextResponse.json({ message: 'Gagal memverifikasi admin' }, { status: 500 });
   }
 
+  // 2. Ambil Data Body
   const { status, reason } = await request.json(); 
 
-  if (!status || (status === 'Ditolak' && !reason)) {
-      return NextResponse.json({ message: 'Status (dan alasan jika ditolak) harus diisi' }, { status: 400 });
+  if (!status) {
+      return NextResponse.json({ message: 'Status harus diisi' }, { status: 400 });
   }
-  if (status !== 'Diterima' && status !== 'Ditolak') {
-     return NextResponse.json({ message: "Status tidak valid, harus 'Diterima' atau 'Ditolak'" }, { status: 400 });
-  }
-  if (!donationId) {
-    return NextResponse.json({ message: 'ID Donasi dibutuhkan' }, { status: 400 });
+  if (status === 'Ditolak' && !reason) {
+      return NextResponse.json({ message: 'Alasan penolakan wajib diisi agar donatur tahu.' }, { status: 400 });
   }
 
   try {
-    // --- PERUBAHAN KE SUPABASE ---
-    
-    // Siapkan data untuk di-update
+    // 3. Update Database
     const updateData = {
       status: status,
       id_admin_verifikasi: adminId,
-      rejection_reason: status === 'Diterima' ? null : reason
+      rejection_reason: status === 'Diterima' ? null : reason, // Hapus alasan jika diterima
+      updated_at: new Date().toISOString()
     };
 
-    // Eksekusi query update
-    // Kita filter berdasarkan id_donasi DAN status 'Pending'
-    // .select() di akhir akan mengembalikan data jika berhasil, atau array kosong jika tidak
     const { data, error } = await supabase
       .from('donasi')
       .update(updateData)
       .eq('id_donasi', donationId)
-      .eq('status', 'Pending') // Hanya update jika status masih 'Pending'
-      .select(); // Minta Supabase mengembalikan baris yang di-update
+      // Kita izinkan update ulang jika status sebelumnya bukan 'Diterima' (misal revisi penolakan), 
+      // atau tetapkan rule hanya bisa update yang 'Pending'. Di sini saya set 'Pending' agar aman.
+      .eq('status', 'Pending') 
+      .select();
 
     if (error) throw error;
 
-    // Cek apakah ada baris yang ter-update
     if (!data || data.length === 0) {
       return NextResponse.json(
-        { message: 'Donasi tidak ditemukan atau statusnya bukan "Pending"' },
+        { message: 'Donasi tidak ditemukan atau sudah diverifikasi sebelumnya.' },
         { status: 404 }
       );
     }
-    // --- AKHIR PERUBAHAN ---
+    
+    // (Opsional) Disini bisa tambahkan logika insert ke tabel 'notifikasi' jika ada
     
     return NextResponse.json(
-      { message: `Donasi berhasil di-update ke ${status}` },
+      { message: `Donasi berhasil diperbarui menjadi ${status}` },
       { status: 200 }
     );
 

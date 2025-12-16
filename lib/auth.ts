@@ -46,7 +46,8 @@ export async function verifyAdmin(request: NextRequest): Promise<AuthResult> {
   }
 
   try {
-    const token = tokenCookie.value; // <-- PERBAIKAN: Definisi token
+    // --- PERBAIKAN: Definisikan variabel 'token' di sini ---
+    const token = tokenCookie.value; 
 
     // 1. Verifikasi token
     const { payload } = await jwtVerify(token, secretKey) as { payload: UserPayload };
@@ -62,7 +63,7 @@ export async function verifyAdmin(request: NextRequest): Promise<AuthResult> {
     }
 
     // 3. Ambil data admin terbaru dari Supabase
-    // <-- PERBAIKAN: Menghapus typo '_' setelah kurung kurawal
+    // Hapus typo '_' yang mungkin ada sebelumnya
     const { data: adminData, error } = await supabase
       .from('admin')
       .select('jabatan')
@@ -106,6 +107,7 @@ export async function verifyUser(request: NextRequest): Promise<UserAuthResult> 
   }
 
   try {
+    // --- PERBAIKAN: Definisikan variabel 'token' di sini juga ---
     const token = tokenCookie.value;
     
     // Hanya verifikasi token valid atau tidak, tanpa cek tabel admin

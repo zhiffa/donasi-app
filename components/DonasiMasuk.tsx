@@ -18,9 +18,9 @@ export default function DonasiMasuk({ programId }: { programId: string }) {
   useEffect(() => {
     const fetchDonations = async () => {
       try {
-        // Tambahkan timestamp agar URL unik & tidak di-cache browser
+        // PERBAIKAN: Tambahkan timestamp (?t=...) agar URL selalu unik & browser tidak pakai cache lama
         const res = await fetch(`/api/public/donations/${programId}?t=${new Date().getTime()}`, {
-            cache: 'no-store', // PERBAIKAN: Paksa ambil data baru
+            cache: 'no-store',
             next: { revalidate: 0 }
         });
         
@@ -36,6 +36,11 @@ export default function DonasiMasuk({ programId }: { programId: string }) {
     };
 
     fetchDonations();
+    
+    // Auto-refresh setiap 10 detik agar data selalu live
+    const interval = setInterval(fetchDonations, 10000);
+    return () => clearInterval(interval);
+
   }, [programId]);
 
   return (
@@ -59,7 +64,7 @@ export default function DonasiMasuk({ programId }: { programId: string }) {
                 <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 shrink-0">
                   <User size={20} />
                 </div>
-                <div className="flex-1 min-w-0"> {/* min-w-0 agar truncate bekerja */}
+                <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 truncate">{d.nama}</p>
                   <p className="text-xs text-gray-500">
                     {new Date(d.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
