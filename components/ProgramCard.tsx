@@ -29,35 +29,39 @@ export default function ProgramCard({
   }
 
   return (
-    // --- PERUBAHAN DI SINI: tambahkan h-full untuk mengisi tinggi slide ---
-    <div className="overflow-hidden rounded-lg bg-white shadow-lg transition-transform hover:scale-[1.03] flex flex-col h-full">
+    // --- PERUBAHAN 1: rounded-3xl (lebih bulat) & h-full ---
+    <div className="overflow-hidden rounded-3xl bg-white shadow-lg transition-transform hover:scale-[1.02] flex flex-col h-full border border-gray-100">
       
       <Image
         src={imageUrl} 
         alt={title} 
         width={400} 
-        height={500} 
-        className="w-full aspect-[4/5] object-cover" 
+        height={400} 
+        // Pastikan aspect-square agar tetap kotak rapi
+        className="w-full aspect-square object-cover" 
       />
 
-      {/* Konten card fleksibel, agar tombol selalu di bawah */}
-      <div className="p-6 flex flex-col justify-between flex-grow"> {/* flex-grow agar mengisi sisa ruang */}
+      {/* --- PERUBAHAN 2: Padding diperkecil (p-5) agar card terlihat lebih compact --- */}
+      <div className="p-5 flex flex-col justify-between flex-grow"> 
         <div> 
-          <h3 className="mb-2 text-xl font-bold text-gray-900 truncate" title={title}>{title}</h3>
-          <p className="mb-4 text-gray-700 line-clamp-2" title={description}>{description}</p>
+          {/* Judul diperkecil sedikit (text-lg) */}
+          <h3 className="mb-2 text-lg font-bold text-gray-900 truncate" title={title}>{title}</h3>
+          {/* Margin bawah dikurangi (mb-3) */}
+          <p className="mb-3 text-sm text-gray-600 line-clamp-2 leading-relaxed" title={description}>{description}</p>
           
-          <div className="mb-4">
-            <div className="mb-1 flex justify-between">
-              <span className="text-sm font-medium text-gray-700">Terkumpul: <strong>Rp {collected.toLocaleString('id-ID')}</strong></span>
-              <span className="text-sm font-medium text-pastel-pink-dark">{percentage}%</span>
+          <div className="mb-3">
+            <div className="mb-1 flex justify-between text-xs font-semibold">
+              <span className="text-gray-700">Terkumpul: <strong>Rp {collected.toLocaleString('id-ID')}</strong></span>
+              <span className="text-pastel-pink-dark">{percentage}%</span>
             </div>
-            <div className="h-2.5 w-full rounded-full bg-gray-200">
+            {/* Progress bar sedikit lebih tipis (h-2) */}
+            <div className="h-2 w-full rounded-full bg-gray-100">
               <div 
-                className="h-2.5 rounded-full bg-pastel-pink-dark" 
+                className="h-2 rounded-full bg-pastel-pink-dark" 
                 style={{ width: `${percentage}%` }}
               ></div>
             </div>
-            <p className="text-right text-sm text-gray-500 mt-1">
+            <p className="text-right text-xs text-gray-400 mt-1">
               Target: Rp {target.toLocaleString('id-ID')}
             </p>
           </div>
@@ -65,7 +69,7 @@ export default function ProgramCard({
 
         <Link 
           href={`/program/${id}`} 
-          className="block w-full rounded-full bg-pastel-pink-dark py-2 px-4 text-center font-bold text-gray-900 transition hover:bg-pastel-pink-light mt-4"
+          className="block w-full rounded-full bg-pastel-pink-dark py-2 px-4 text-center text-sm font-bold text-gray-900 transition hover:bg-pastel-pink-light mt-2"
         >
           Donate Now
         </Link>

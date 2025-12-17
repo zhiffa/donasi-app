@@ -1,12 +1,12 @@
-import { Suspense } from 'react' // Impor Suspense
+import { Suspense } from 'react'
 import Hero from '@/components/Hero'
 import AboutUs from '@/components/AboutUs'
 import Achievements from '@/components/Achievements'
-import ActivePrograms, { ActiveProgramsSkeleton } from '@/components/ActivePrograms' // Impor Skeleton
+import ActivePrograms, { ActiveProgramsSkeleton } from '@/components/ActivePrograms'
+import FinishedPrograms from '@/components/FinishedPrograms' // <-- 1. Import ini
 import Gallery from '@/components/Gallery'
 import GetInTouch from '@/components/GetInTouch'
 
-// Halaman utama sekarang menjadi 'async' untuk me-load data di server
 export default async function Home() {
   return (
     <>
@@ -20,18 +20,21 @@ export default async function Home() {
       <Achievements />
 
       {/* Section 4: Active Donation Programs */}
-      {/* Bungkus ActivePrograms dengan <Suspense> 
-        Ini akan menampilkan 'fallback' (UI loading) selagi
-        komponen mengambil data dari backend.
-      */}
       <Suspense fallback={<ActiveProgramsSkeleton />}>
         <ActivePrograms />
       </Suspense>
 
-      {/* Section 5: Gallery & Completed Programs */}
+      {/* Section 5: Finished Programs (Laporan) */}
+      {/* 2. Tambahkan komponen FinishedPrograms disini */}
+      {/* Kita bungkus Suspense agar tidak memblokir loading halaman utama */}
+      <Suspense fallback={<div className="py-16 text-center text-gray-400">Memuat Laporan...</div>}>
+        <FinishedPrograms />
+      </Suspense>
+
+      {/* Section 6: Gallery */}
       <Gallery />
 
-      {/* Section 6: Get In Touch */}
+      {/* Section 7: Get In Touch */}
       <GetInTouch />
     </>
   )

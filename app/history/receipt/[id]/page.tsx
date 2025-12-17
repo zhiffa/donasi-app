@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import Image from 'next/image'
+import Image from 'next/image' 
 import { Loader2, Printer } from 'lucide-react'
 
 interface ReceiptData {
@@ -64,7 +63,6 @@ export default function ReceiptPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* --- KERTAS SURAT (ID: printable-area) --- */}
-      {/* Saya menambahkan class 'text-sm' sebagai base font size, bisa diganti */}
       <div 
         id="printable-area"
         className="bg-white w-full max-w-[210mm] min-h-[297mm] p-[20mm] shadow-2xl text-gray-900 font-serif relative"
@@ -72,14 +70,23 @@ export default function ReceiptPage({ params }: { params: { id: string } }) {
         
         {/* KOP SURAT */}
         <div className="border-b-4 border-double border-gray-800 pb-6 mb-8 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-                {/* Logo Placeholder */}
-                <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center text-xs font-bold text-gray-500">
-                    LOGO
+            <div className="flex items-center gap-6">
+                
+                {/* --- BAGIAN LOGO (DIPERBARUI) --- */}
+                <div className="relative w-24 h-24 flex-shrink-0">
+                    <Image 
+                        src="/logo.png" 
+                        alt="Logo Yayasan" 
+                        fill
+                        className="object-contain"
+                        priority 
+                    />
                 </div>
+                {/* ------------------------------- */}
+
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-800 uppercase tracking-wider">YAYASAN SHINE IN SMILES</h1>
-                    <p className="text-sm text-gray-600">Jl. Kebaikan No. 123, Jakarta Pusat, Indonesia</p>
+                    <h1 className="text-3xl font-bold text-gray-800 uppercase tracking-wider">YAYASAN ABHIMATA : SHINE IN SMILES</h1>
+                    <p className="text-sm text-gray-600">Jl Bintaro Jaya, Pondok Aren, Tangerang Selatan, Indonesia</p>
                     <p className="text-sm text-gray-600">Telp: (021) 123-4567 | Email: info@shineinsmiles.org</p>
                 </div>
             </div>
@@ -93,7 +100,7 @@ export default function ReceiptPage({ params }: { params: { id: string } }) {
 
         {/* ISI SURAT */}
         <div className="space-y-6 text-lg leading-relaxed content-text">
-            <p>Yang bertanda tangan di bawah ini, pengurus Yayasan Shine in Smiles menerangkan bahwa:</p>
+            <p>Yang bertanda tangan di bawah ini, pengurus Yayasan Abhimata - Shine in Smiles menerangkan bahwa:</p>
 
             <table className="w-full mb-8">
                 <tbody>
@@ -149,7 +156,7 @@ export default function ReceiptPage({ params }: { params: { id: string } }) {
                 <div className="relative">
                     {/* Simulasi Cap */}
                     <div className="absolute -top-16 left-10 w-32 h-32 border-4 border-blue-800 rounded-full opacity-20 flex items-center justify-center rotate-[-15deg] print:opacity-50">
-                        <span className="text-xs font-bold text-blue-800 text-center">YAYASAN<br/>SHINE IN SMILES<br/>OFFICIAL</span>
+                        <span className="text-xs font-bold text-blue-800 text-center">YAYASAN ABHIMATA<br/>SHINE IN SMILES<br/>OFFICIAL</span>
                     </div>
                     
                     <p className="font-bold underline decoration-1 underline-offset-4">{data.nama_verifikator}</p>
@@ -160,12 +167,12 @@ export default function ReceiptPage({ params }: { params: { id: string } }) {
 
         {/* FOOTER */}
         <div className="absolute bottom-10 left-0 right-0 text-center text-sm text-gray-400 print:bottom-4">
-            Surat ini dicetak secara otomatis oleh sistem Shine in Smiles.
+            Surat ini dicetak secara otomatis oleh sistem Abhimata - Shine in Smiles.
         </div>
 
       </div>
       
-      {/* --- CSS KHUSUS PRINT (DIPERBARUI UNTUK FONT & UKURAN) --- */}
+      {/* --- CSS KHUSUS PRINT --- */}
       <style jsx global>{`
         @media print {
             /* 1. Sembunyikan semua elemen di halaman */
@@ -186,7 +193,7 @@ export default function ReceiptPage({ params }: { params: { id: string } }) {
                 width: 100%;
                 margin: 0;
                 /* PENGATURAN PADDING & FONT UNTUK CETAK */
-                padding: 15mm !important; /* Sedikit kurangi padding agar lebih muat */
+                padding: 15mm !important; 
                 background: white;
                 box-shadow: none;
                 

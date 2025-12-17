@@ -34,10 +34,11 @@ export async function GET(
       `)
       .eq('id_donasi', donationId)
       .eq('donatur.id_user', auth.userId) 
-      .single();
+      .limit(1)        // <--- PERBAIKAN 1: Pastikan cuma ambil 1
+      .maybeSingle();  // <--- PERBAIKAN 2: Pakai maybeSingle biar gak crash kalo data double/kosong
 
     if (error) {
-        console.error("DB Error:", error.message);
+        console.error("DB Error (Main Data):", error.message);
         throw error;
     }
 
@@ -53,16 +54,18 @@ export async function GET(
     // ---------------------------------------------------------
     let jadwalData = null;
     
-    // PERUBAHAN DISINI: Kita cek jadwal untuk SEMUA donasi Barang.
-    // Karena Self-Delivery yang sudah sampai pun datanya disimpan di tabel jadwal.
     if (d.jenis_donasi === 'Barang') {
         const { data: jadwalRes, error: jadwalError } = await supabase
             .from('jadwal_penjemputan')
             .select('status_penjemputan, alamat_penjemputan, tanggal_penjemputan, jam_penjemputan')
             .eq('id_donasi', donationId)
-            .single(); 
+            .limit(1)       // <--- PERBAIKAN 3: Kunci ini. Kalo ada history jadwal, ambil 1 saja.
+            .maybeSingle(); // <--- PERBAIKAN 4: Ubah single() jadi maybeSingle()
         
-        if (!jadwalError && jadwalRes) {
+        // Log error tapi jangan bikin 500 (opsional, biar aplikasi tetep jalan walau jadwal error)
+        if (jadwalError) {
+             console.warn("DB Error (Jadwal):", jadwalError.message);
+        } else if (jadwalRes) {
             jadwalData = jadwalRes;
         }
     }
@@ -99,7 +102,6 @@ export async function GET(
         
         nama_verifikator: userAdmin?.nama || 'Pengurus Yayasan',
         
-        // Jadwal sekarang akan terisi walaupun metode = Self-Delivery (jika status sudah Selesai)
         jadwal: jadwalData ? {
             status_penjemputan: jadwalData.status_penjemputan || 'Dijadwalkan',
             alamat_penjemputan: jadwalData.alamat_penjemputan || '-',

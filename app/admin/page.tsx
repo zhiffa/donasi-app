@@ -6,7 +6,7 @@ import {
   PieChart, Pie, Cell, Legend
 } from 'recharts';
 
-// --- Components ---
+// --- Components (Tidak Berubah) ---
 
 interface StatCardProps {
   icon: React.ReactNode;
@@ -60,19 +60,17 @@ export default function AdminDashboardPage() {
   if (loading) return <div className="p-8 text-center text-gray-500">Memuat data dashboard...</div>;
   if (!data) return <div className="p-8 text-center text-red-500">Gagal memuat data.</div>;
 
-  // Warna untuk Pie Chart
-  const COLORS = ['#3b82f6', '#f59e0b']; // Biru (Uang), Kuning (Barang)
+  const COLORS = ['#3b82f6', '#f59e0b']; 
 
   return (
     <div className="space-y-8 pb-10">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h1 className="text-3xl font-bold text-gray-800">Dashboard Overview</h1>
         <p className="text-sm text-gray-500">Update terakhir: {new Date().toLocaleTimeString()}</p>
       </div>
 
       {/* --- ROW 1: Statistik Utama --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* 1. Total Donations (Uang) */}
         <StatCard
           icon={<DollarSign size={24} />}
           title="Total Uang Masuk"
@@ -80,8 +78,6 @@ export default function AdminDashboardPage() {
           bgColorClass="bg-green-50"
           iconColorClass="text-green-600"
         />
-        
-        {/* 2. Total User */}
         <StatCard
           icon={<Users size={24} />}
           title="Total User Terdaftar"
@@ -90,8 +86,6 @@ export default function AdminDashboardPage() {
           bgColorClass="bg-blue-50"
           iconColorClass="text-blue-600"
         />
-
-        {/* 3. To Do List (Pending Barang) */}
         <StatCard
           icon={<ListTodo size={24} />}
           title="Verifikasi Barang (Pending)"
@@ -99,8 +93,6 @@ export default function AdminDashboardPage() {
           bgColorClass="bg-purple-50"
           iconColorClass="text-purple-600"
         />
-
-        {/* 4. Event Stats */}
         <StatCard
           icon={<Calendar size={24} />}
           title="Program Berjalan"
@@ -111,10 +103,10 @@ export default function AdminDashboardPage() {
         />
       </div>
 
-      {/* --- ROW 2: Info Pengiriman & Komposisi (3 Kolom) --- */}
+      {/* --- ROW 2: Info Pengiriman & Komposisi --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* KOLOM 1: Donasi Antar Sendiri */}
+          {/* KOLOM 1 */}
           <StatCard
             icon={<Package size={24} />}
             title="Donasi Antar Sendiri"
@@ -124,8 +116,8 @@ export default function AdminDashboardPage() {
             iconColorClass="text-teal-600"
           />
 
-          {/* KOLOM 2: Status Pengiriman (Pick-up) */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-full">
+          {/* KOLOM 2 */}
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
                     <Truck size={16}/> Status Pick-up
                 </h2>
@@ -154,19 +146,21 @@ export default function AdminDashboardPage() {
                 </div>
             </div>
 
-            {/* KOLOM 3: Pie Chart */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-full flex flex-col justify-between">
-                <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Komposisi Donasi</h2>
-                {/* --- PERUBAHAN: Tinggi ditambah menjadi h-96 agar lega --- */}
-                <div className="h-96 w-full relative flex-1">
+            {/* KOLOM 3: Pie Chart (FIXED FOR MOBILE) */}
+            {/* Hapus 'h-full'. Ganti dengan styling yang tidak tergantung parent flex di mobile */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between">
+                <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Komposisi Donasi</h2>
+                
+                {/* Pastikan wrapper ini punya tinggi yang fix (pixel) agar responsive container bekerja */}
+                <div className="h-80 w-full relative">
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                             <Pie
                                 data={data.pieData}
                                 cx="50%"
-                                cy="55%" // Posisi tengah vertikal
-                                innerRadius={45} // -- DIPERKECIL -- (sebelumnya 60)
-                                outerRadius={65} // -- DIPERKECIL -- (sebelumnya 90)
+                                cy="50%"
+                                innerRadius={60} 
+                                outerRadius={80} 
                                 paddingAngle={5}
                                 dataKey="value"
                             >
@@ -175,35 +169,32 @@ export default function AdminDashboardPage() {
                                 ))}
                             </Pie>
                             <Tooltip />
-                            <Legend verticalAlign="bottom" align="right" // Geser ke kanan
-                                layout="vertical" // Susunan mendatar
-                                iconSize={10} 
-                                wrapperStyle={{fontSize: '12px', paddingRight: '5px'}}
-                              />
+                            <Legend verticalAlign="bottom" height={36}/>
                         </PieChart>
                     </ResponsiveContainer>
                     {/* Center Icon */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none pt-7 pr-16">
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-8">
                         <Package size={24} className="text-gray-400 opacity-50"/>
                     </div>
                 </div>
             </div>
-
       </div>
 
-      {/* --- ROW 3: Grafik Tren Donasi (Full Width) --- */}
+      {/* --- ROW 3: Grafik Tren Donasi 30 HARI --- */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-          <h2 className="text-lg font-bold text-gray-800 mb-6">Tren Donasi Masuk (7 Hari Terakhir)</h2>
+          <h2 className="text-lg font-bold text-gray-800 mb-6">Tren Donasi Masuk (30 Hari Terakhir)</h2>
           <div className="h-80 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.trendData}>
+              <BarChart data={data.trendData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                 <XAxis 
                     dataKey="name" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{fill: '#6b7280', fontSize: 12}} 
+                    tick={{fill: '#6b7280', fontSize: 10}} 
                     dy={10}
+                    // minTickGap mencegah tulisan tanggal bertumpuk
+                    minTickGap={15} 
                 />
                 <YAxis 
                     axisLine={false} 
@@ -215,8 +206,9 @@ export default function AdminDashboardPage() {
                     cursor={{fill: '#f3f4f6'}}
                     contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
                     formatter={(value: number) => [`Rp ${value.toLocaleString('id-ID')}`, 'Jumlah']}
+                    labelStyle={{color: '#374151', fontWeight: 'bold'}}
                 />
-                <Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={50} />
+                <Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} />
               </BarChart>
             </ResponsiveContainer>
           </div>

@@ -2,14 +2,16 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { supabase } from '@/lib/supabaseClient';
 import { verifyAdmin } from '@/lib/auth';
 
+// Pastikan selalu dynamic agar data tidak di-cache statis oleh Next.js
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
+  // 1. Cek Admin
   const auth = await verifyAdmin(request);
   if (!auth.isAdmin) return auth.response;
 
   try {
-    // Gunakan Promise.all agar semua query jalan barengan (lebih cepat)
+    // 2. Ambil SEMUA data secara paralel (Biar loading dashboard ngebut)
     const [
       donasiRes,
       userRes,
@@ -17,55 +19,54 @@ export async function GET(request: NextRequest) {
       jadwalRes,
       donaturRes
     ] = await Promise.all([
-      // 1. Ambil semua donasi
-      // Tambahkan 'nomor_resi' untuk kelengkapan data jika nanti dibutuhkan
-      supabase.from('donasi').select('nominal, jenis_donasi, status, created_at, metode_pengiriman, nomor_resi'),
+      // A. Ambil semua donasi (untuk hitung total uang, barang pending, tren, pie chart)
+      supabase.from('donasi').select('nominal, jenis_donasi, status, created_at, metode_pengiriman'),
       
-      // 2. Hitung total user (role donatur)
+      // B. Hitung total user yang role-nya donatur
       supabase.from('user').select('id_user', { count: 'exact', head: true }).eq('role', 'donatur'),
       
-      // 3. Ambil data kegiatan (untuk status)
+      // C. Ambil data kegiatan (untuk statistik event aktif)
       supabase.from('kegiatan').select('status'),
 
-      // 4. Ambil jadwal penjemputan (untuk status tracking barang pickup)
+      // D. Ambil jadwal penjemputan (untuk status tracking barang pickup)
       supabase.from('jadwal_penjemputan').select('status_penjemputan'),
 
-      // 5. Hitung user yang PERNAH donasi (status Diterima) - Distinct count
-      // Karena Supabase basic tidak support .distinct() langsung di count, kita ambil ID-nya saja lalu set di JS
+      // E. Ambil ID donatur yang donasinya sukses (untuk hitung donatur aktif unik)
       supabase.from('donasi').select('id_donatur').eq('status', 'Diterima')
     ]);
 
+    // Cek error basic
     if (donasiRes.error) throw donasiRes.error;
 
     const allDonations = donasiRes.data || [];
     
-    // --- 1. Total Donations (Uang Masuk - Status Diterima) ---
+    // --- 3. PENGOLAHAN DATA STATISTIK UTAMA ---
+
+    // Total Uang (Hanya yang status Diterima)
     const totalDonations = allDonations
       .filter(d => d.jenis_donasi === 'Uang' && d.status === 'Diterima')
       .reduce((acc, curr) => acc + (curr.nominal || 0), 0);
 
-    // --- 2. Total User (Yang daftar) ---
+    // Total User Terdaftar
     const totalUsers = userRes.count || 0;
 
-    // --- 3. To Do List (Donasi Barang Pending) ---
-    // Mencakup semua donasi barang yang belum diterima/ditolak (baik pickup maupun self-delivery)
+    // To Do List (Barang Pending) - Perlu verifikasi admin
     const todoListCount = allDonations.filter(d => d.jenis_donasi === 'Barang' && d.status === 'Pending').length;
 
-    // --- 4 & 5. Event Stats ---
+    // Statistik Event
     const events = kegiatanRes.data || [];
     const ongoingEvents = events.filter(e => e.status === 'Aktif').length;
-    const totalEvents = events.length; // Semua event (termasuk selesai/draft)
+    const totalEvents = events.length;
 
-    // --- 6. Total Active Donors ---
+    // Statistik Donatur Aktif (Unik)
     const donorIds = donaturRes.data?.map(d => d.id_donatur) || [];
-    const totalDonors = new Set(donorIds).size; // Hitung unique ID
+    const totalDonors = new Set(donorIds).size; // Set membersihkan duplikat ID
 
-    // --- 7. Donation Status (Barang Tracking) ---
+    // --- 4. STATISTIK TRACKING PENGIRIMAN ---
+    
     const jadwalList = jadwalRes.data || [];
     
-    // Hitung Self Delivery
-    // Logika: Barang + Self-Delivery + Status Pending
-    // Ini mencakup user yang sudah input resi ATAU belum, asalkan statusnya masih Pending (belum diterima admin)
+    // Hitung Self Delivery yang masih Pending
     const selfDeliveryCount = allDonations.filter(d => 
         d.jenis_donasi === 'Barang' && 
         d.metode_pengiriman === 'Self-Delivery' && 
@@ -79,30 +80,40 @@ export async function GET(request: NextRequest) {
       selfDelivery: selfDeliveryCount
     };
 
-    // --- GRAFIK 1: Tren Donasi (7 Hari Terakhir) ---
-    // Kita kelompokkan data 'Uang' 'Diterima' berdasarkan tanggal
-    const last7Days = [...Array(7)].map((_, i) => {
+    // --- 5. LOGIKA GRAFIK TREN (30 HARI TERAKHIR) ---
+    
+    const daysCount = 30; // Request kamu: 1 Bulan
+    
+    // Bikin array tanggal mundur 30 hari ke belakang
+    const last30Days = [...Array(daysCount)].map((_, i) => {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      return d.toISOString().split('T')[0]; // Format YYYY-MM-DD
-    }).reverse();
+      return d.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+    }).reverse(); // Dibalik biar urut dari tanggal lama ke baru
 
-    const trendData = last7Days.map(date => {
+    const trendData = last30Days.map(date => {
+      // Filter donasi uang diterima pada tanggal tersebut
       const dailyTotal = allDonations
         .filter(d => 
           d.jenis_donasi === 'Uang' && 
           d.status === 'Diterima' && 
-          d.created_at.startsWith(date)
+          d.created_at.startsWith(date) // Mencocokkan tanggal YYYY-MM-DD
         )
         .reduce((acc, curr) => acc + (curr.nominal || 0), 0);
       
-      // Format tanggal biar cantik (misal: "10 Nov")
-      const dateLabel = new Date(date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-      return { name: dateLabel, total: dailyTotal };
+      // Format label tanggal (misal: "17/12") biar muat di grafik HP
+      const dObj = new Date(date);
+      const dateLabel = `${dObj.getDate()}/${dObj.getMonth() + 1}`; 
+      
+      return { 
+          name: dateLabel, 
+          total: dailyTotal,
+          fullDate: date // Simpan tanggal lengkap kalau nanti butuh tooltip detail
+      };
     });
 
-    // --- GRAFIK 2: Pie Chart (Uang vs Barang) ---
-    // Hitung berdasarkan frekuensi transaksi (bukan nominal)
+    // --- 6. LOGIKA PIE CHART (KOMPOSISI) ---
+    // Kita hitung berdasarkan FREKUENSI (Jumlah Transaksi)
     const uangCount = allDonations.filter(d => d.jenis_donasi === 'Uang').length;
     const barangCount = allDonations.filter(d => d.jenis_donasi === 'Barang').length;
     
@@ -111,7 +122,7 @@ export async function GET(request: NextRequest) {
       { name: 'Barang', value: barangCount },
     ];
 
-    // Response Akhir
+    // --- 7. RETURN RESPONSE ---
     return NextResponse.json({
       totalDonations,
       totalUsers,
