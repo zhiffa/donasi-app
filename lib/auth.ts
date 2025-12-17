@@ -3,40 +3,33 @@ import { cookies } from 'next/headers';
 import { jwtVerify, type JWTPayload } from 'jose';
 import { supabase } from '@/lib/supabaseClient';
 
-// Dapatkan secret key dari .env.local
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   throw new Error('JWT_SECRET tidak ditemukan di .env.local');
 }
 const secretKey = new TextEncoder().encode(JWT_SECRET);
 
-// Tipe data payload dari JWT
 interface UserPayload extends JWTPayload {
   userId: number;
-  role: 'admin' | 'donatur';
+  role: string; // <-- Ubah jadi string agar fleksibel
   name: string;
-  jabatan: 'Admin Program' | 'Admin Operasional' | null;
 }
 
-// Tipe data untuk hasil return verifyAdmin
 interface AuthResult {
   isAdmin: boolean;
   userId: number | null;
-  jabatan: 'Admin Program' | 'Admin Operasional' | null;
+  jabatan: 'Admin Program' | 'Admin Operasional' | 'Super Admin' | null;
   response: NextResponse; 
 }
 
-// Tipe data untuk hasil return verifyUser (User Biasa)
 interface UserAuthResult {
   isAuthenticated: boolean;
   userId: number | null;
-  role: 'admin' | 'donatur' | null;
+  role: string | null;
   response: NextResponse;
 }
 
-/**
- * Helper untuk memverifikasi token ADMIN
- */
+// --- VERIFIKASI ADMIN ---
 export async function verifyAdmin(request: NextRequest): Promise<AuthResult> {
   const tokenCookie = cookies().get('session_token');
   const unauthorizedResponse = NextResponse.json({ message: 'Tidak terautentikasi' }, { status: 401 });
@@ -46,14 +39,13 @@ export async function verifyAdmin(request: NextRequest): Promise<AuthResult> {
   }
 
   try {
-    // --- PERBAIKAN: Definisikan variabel 'token' di sini ---
     const token = tokenCookie.value; 
-
-    // 1. Verifikasi token
     const { payload } = await jwtVerify(token, secretKey) as { payload: UserPayload };
 
-    // 2. Cek apakah rolenya admin
-    if (payload.role !== 'admin') {
+    // --- PERBAIKAN: Gunakan .includes() agar Super Admin lolos ---
+    const isRoleAdmin = payload.role === 'admin' || payload.role.includes('Admin');
+
+    if (!isRoleAdmin) {
       return { 
         isAdmin: false, 
         userId: payload.userId, 
@@ -62,8 +54,7 @@ export async function verifyAdmin(request: NextRequest): Promise<AuthResult> {
       };
     }
 
-    // 3. Ambil data admin terbaru dari Supabase
-    // Hapus typo '_' yang mungkin ada sebelumnya
+    // Ambil JABATAN dari Tabel 'admin'
     const { data: adminData, error } = await supabase
       .from('admin')
       .select('jabatan')
@@ -75,15 +66,14 @@ export async function verifyAdmin(request: NextRequest): Promise<AuthResult> {
         isAdmin: false, 
         userId: payload.userId, 
         jabatan: null, 
-        response: NextResponse.json({ message: 'Data admin tidak terkait' }, { status: 403 }) 
+        response: NextResponse.json({ message: 'Data admin tidak ditemukan' }, { status: 403 }) 
       };
     }
 
-    // 4. Berhasil
     return {
       isAdmin: true,
       userId: payload.userId,
-      jabatan: adminData.jabatan as 'Admin Program' | 'Admin Operasional',
+      jabatan: adminData.jabatan as any, // Type casting aman
       response: unauthorizedResponse,
     };
 
@@ -94,10 +84,7 @@ export async function verifyAdmin(request: NextRequest): Promise<AuthResult> {
   }
 }
 
-/**
- * Helper untuk memverifikasi token USER BIASA (Donatur/Umum)
- * <-- TAMBAHAN: Fungsi ini diperlukan untuk memperbaiki error 'verifyUser' missing
- */
+// --- VERIFIKASI USER BIASA ---
 export async function verifyUser(request: NextRequest): Promise<UserAuthResult> {
   const tokenCookie = cookies().get('session_token');
   const unauthorizedResponse = NextResponse.json({ message: 'Tidak terautentikasi' }, { status: 401 });
@@ -107,10 +94,7 @@ export async function verifyUser(request: NextRequest): Promise<UserAuthResult> 
   }
 
   try {
-    // --- PERBAIKAN: Definisikan variabel 'token' di sini juga ---
     const token = tokenCookie.value;
-    
-    // Hanya verifikasi token valid atau tidak, tanpa cek tabel admin
     const { payload } = await jwtVerify(token, secretKey) as { payload: UserPayload };
 
     return {

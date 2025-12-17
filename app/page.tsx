@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { Suspense } from 'react'
 import Hero from '@/components/Hero'
 import AboutUs from '@/components/AboutUs'
@@ -6,6 +8,7 @@ import ActivePrograms, { ActiveProgramsSkeleton } from '@/components/ActiveProgr
 import FinishedPrograms from '@/components/FinishedPrograms' // <-- 1. Import ini
 import Gallery from '@/components/Gallery'
 import GetInTouch from '@/components/GetInTouch'
+
 
 export default async function Home() {
   return (

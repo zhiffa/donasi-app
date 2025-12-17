@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-export default function LoginPage() {
+function LoginContent() {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -21,7 +21,7 @@ export default function LoginPage() {
   const [registerEmail, setRegisterEmail] = useState('')
   const [registerPhone, setRegisterPhone] = useState('')
   const [registerPassword, setRegisterPassword] = useState('')
-  const [registerSamarkan, setRegisterSamarkan] = useState(false) // Tetap ada di UI meski API mungkin ignore
+  const [registerSamarkan, setRegisterSamarkan] = useState(false)
   const [registerError, setRegisterError] = useState<string | null>(null)
   const [registerSuccess, setRegisterSuccess] = useState<string | null>(null)
   const [isRegisterLoading, setIsRegisterLoading] = useState(false)
@@ -48,9 +48,10 @@ export default function LoginPage() {
         throw new Error(data.message || 'Login gagal')
       }
 
-      // Login berhasil
-      // Cek role untuk redirect
-      if (data.user.role === 'admin') {
+      // --- LOGIKA REDIRECT DIPERBAIKI ---
+      // Cek apakah role adalah 'admin' (lama) ATAU mengandung kata 'Admin' (baru: Super Admin, Admin Program, dll)
+      const role = data.user.role || '';
+      if (role === 'admin' || role.includes('Admin')) {
         router.push('/admin')
       } else {
         router.push(redirectUrl)
@@ -88,18 +89,15 @@ export default function LoginPage() {
         throw new Error(data.message || 'Registrasi gagal')
       }
 
-      // Registrasi berhasil
       setRegisterSuccess(
         'Registrasi berhasil! Silakan login dengan email atau nomor telepon Anda.'
       )
-      // Reset form
       setRegisterName('')
       setRegisterEmail('')
       setRegisterPhone('')
       setRegisterPassword('')
       setRegisterSamarkan(false)
       
-      // Pindah ke tab login setelah delay singkat
       setTimeout(() => {
           setAuthMode('login')
           setRegisterSuccess(null)
@@ -136,7 +134,6 @@ export default function LoginPage() {
 
         {/* === RIGHT COLUMN: FORM === */}
         <div className="w-full p-8 md:w-1/2 md:p-12 overflow-y-auto max-h-screen">
-          {/* === LOGIN FORM === */}
           {authMode === 'login' && (
             <>
               <h2 className="mb-6 text-center text-3xl font-bold text-gray-800">
@@ -208,7 +205,6 @@ export default function LoginPage() {
             </>
           )}
 
-          {/* === REGISTER FORM === */}
           {authMode === 'register' && (
             <>
               <h2 className="mb-6 text-center text-3xl font-bold text-gray-800">
@@ -312,5 +308,17 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+        <div className="flex min-h-screen items-center justify-center bg-gray-100">
+            <div className="text-gray-500">Memuat halaman login...</div>
+        </div>
+    }>
+      <LoginContent />
+    </Suspense>
   )
 }

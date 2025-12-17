@@ -6,7 +6,9 @@ export async function GET(request: NextRequest) {
   const auth = await verifyAdmin(request);
 
   if (!auth.isAdmin) return auth.response;
-  if (auth.jabatan !== 'Admin Operasional') {
+  
+  // LOGIC BARU: Izinkan jika Admin Operasional ATAU Super Admin
+  if (auth.jabatan !== 'Admin Operasional' && auth.jabatan !== 'Super Admin') {
     return NextResponse.json({ message: 'Akses ditolak' }, { status: 403 });
   }
 
@@ -25,7 +27,7 @@ export async function GET(request: NextRequest) {
         nomor_resi,
         rejection_reason,
         donatur ( user ( nama ) ),
-        jadwal_penjemputan ( status_penjemputan )  // <--- TAMBAHAN JOIN
+        jadwal_penjemputan ( status_penjemputan )
       `)
       .order('created_at', { ascending: false });
 
@@ -35,13 +37,12 @@ export async function GET(request: NextRequest) {
         const donaturObj = Array.isArray(d.donatur) ? d.donatur[0] : d.donatur;
         const userObj = donaturObj && Array.isArray(donaturObj.user) ? donaturObj.user[0] : donaturObj?.user;
         
-        // Ambil status penjemputan (karena relasi bisa array/object tergantung setup)
         const jadwalObj = Array.isArray(d.jadwal_penjemputan) ? d.jadwal_penjemputan[0] : d.jadwal_penjemputan;
 
         return {
             ...d,
             nama_donatur: userObj?.nama || 'Tanpa Nama',
-            status_logistik: jadwalObj?.status_penjemputan || null, // <--- Mapping ke field baru
+            status_logistik: jadwalObj?.status_penjemputan || null,
             donatur: undefined,
             jadwal_penjemputan: undefined
         };

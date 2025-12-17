@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
-import { supabase } from '@/lib/supabaseClient'; // Ganti db dengan supabase
+import { supabase } from '@/lib/supabaseClient'; 
+
+export const dynamic = 'force-dynamic'; // Tambahan biar ga cache
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -29,8 +31,7 @@ export async function GET() {
   try {
     const { payload } = (await jwtVerify(token, secretKey)) as { payload: UserPayload };
 
-    // --- PERUBAHAN KE SUPABASE ---
-    // Ambil data pengguna terbaru, lakukan JOIN di sisi Supabase
+    // Ambil data pengguna terbaru + join admin/donatur
     const { data, error } = await supabase
       .from('user')
       .select(`
@@ -42,7 +43,7 @@ export async function GET() {
         admin ( jabatan )
       `)
       .eq('id_user', payload.userId)
-      .single(); // Ambil satu data
+      .single();
 
     if (error || !data) {
       console.error('[ME_GET_SUPABASE_ERROR]', error);
@@ -52,23 +53,24 @@ export async function GET() {
       );
     }
     
-    // 4. Ratakan (flatten) data untuk mencocokkan output lama Anda
-    // Supabase mengembalikan: { ..., donatur: { no_telp: '...' }, admin: { jabatan: '...' } }
-    // Kita ubah jadi: { ..., phone: '...', jabatan: '...' }
-    
-    // Ekstrak data donatur dan admin, `donatur` dan `admin` bisa jadi array atau object
+    // Ratakan data (flatten)
     const donaturData = Array.isArray(data.donatur) ? data.donatur[0] : data.donatur;
     const adminData = Array.isArray(data.admin) ? data.admin[0] : data.admin;
+
+    // --- BAGIAN PENTING YANG DIUBAH ---
+    // Logika: Jika ada jabatan (misal "Super Admin"), pakai itu sebagai Role.
+    // Jika tidak ada (misal donatur), pakai role asli dari tabel user.
+    const effectiveRole = adminData?.jabatan ? adminData.jabatan : data.role;
 
     const user = {
       id_user: data.id_user,
       nama: data.nama,
       email: data.email,
-      role: data.role,
+      role: effectiveRole, // <-- Di sini kuncinya! Frontend akan terima "Super Admin"
       phone: donaturData?.no_telp || null,
       jabatan: adminData?.jabatan || null,
     };
-    // --- AKHIR PERUBAHAN ---
+    // ----------------------------------
 
     return NextResponse.json({ user: user }, { status: 200 });
 

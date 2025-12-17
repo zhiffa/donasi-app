@@ -11,7 +11,9 @@ export async function PATCH(
   if (!auth.isAdmin || !auth.userId) {
     return auth.response;
   }
-  if (auth.jabatan !== 'Admin Operasional') {
+  
+  // LOGIC BARU: Izinkan jika Admin Operasional ATAU Super Admin
+  if (auth.jabatan !== 'Admin Operasional' && auth.jabatan !== 'Super Admin') {
     return NextResponse.json({ message: 'Akses ditolak: Hanya Admin Operasional' }, { status: 403 });
   }
 
@@ -68,8 +70,6 @@ export async function PATCH(
         { status: 404 }
       );
     }
-    
-    // (Opsional) Disini bisa tambahkan logika insert ke tabel 'notifikasi' jika ada
     
     return NextResponse.json(
       { message: `Donasi berhasil diperbarui menjadi ${status}` },

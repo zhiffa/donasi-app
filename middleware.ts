@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { jwtVerify } from 'jose'; // Import 'jose' yang sama dengan API login
+import { jwtVerify } from 'jose'; 
 
 // Dapatkan secret key dari .env.local
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -12,7 +12,7 @@ const secretKey = new TextEncoder().encode(JWT_SECRET);
 // Tipe data payload dari JWT
 interface UserPayload {
   userId: number;
-  role: 'admin' | 'donor';
+  role: string; // <-- UBAH KE STRING (Supaya bisa terima 'Super Admin', 'Admin Program', dll)
   iat: number;
   exp: number;
 }
@@ -29,17 +29,23 @@ export async function middleware(request: NextRequest) {
     if (!tokenCookie) {
       // Jika tidak ada token, paksa redirect ke /login
       const loginUrl = new URL('/login', request.url);
-      loginUrl.searchParams.set('redirect', pathname); // Simpan halaman tujuan
+      loginUrl.searchParams.set('redirect', pathname); 
       return NextResponse.redirect(loginUrl);
     }
 
     try {
       // 4. Verifikasi token
       const { payload } = await jwtVerify(tokenCookie.value, secretKey) as { payload: UserPayload };
+      
+      const userRole = payload.role;
 
-      // 5. Cek apakah rolenya 'admin'
-      if (payload.role !== 'admin') {
-        // Jika BUKAN admin, lempar ke halaman utama (atau halaman "Dilarang")
+      // --- PERBAIKAN LOGIKA DI SINI ---
+      // Cek apakah role adalah 'admin' (lama) ATAU mengandung kata 'Admin' (baru)
+      // Contoh: 'Super Admin', 'Admin Program', 'Admin Operasional' akan lolos karena ada kata 'Admin'
+      const isAdmin = userRole === 'admin' || userRole.includes('Admin');
+
+      if (!isAdmin) {
+        // Jika BUKAN admin, lempar ke halaman utama
         return NextResponse.redirect(new URL('/', request.url));
       }
 
@@ -62,14 +68,6 @@ export async function middleware(request: NextRequest) {
 // Konfigurasi: Tentukan rute mana yang harus dijalankan middleware ini
 export const config = {
   matcher: [
-    /*
-     * Cocokkan semua path, KECUALI:
-     * - /api/ (rute API)
-     * - /_next/static/ (file statis)
-     * - /_next/image/ (file gambar)
-     * - /favicon.ico (file ikon)
-     * Ini akan menjalankan middleware di semua Halaman, termasuk /admin
-     */
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
 };

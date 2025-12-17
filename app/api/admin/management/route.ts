@@ -6,7 +6,9 @@ export async function GET(request: NextRequest) {
   const auth = await verifyAdmin(request);
   
   if (!auth.isAdmin) return auth.response;
-  if (auth.jabatan !== 'Admin Operasional') {
+
+  // LOGIC BARU: Izinkan jika Admin Operasional ATAU Super Admin
+  if (auth.jabatan !== 'Admin Operasional' && auth.jabatan !== 'Super Admin') {
     return NextResponse.json({ message: 'Akses ditolak: Hanya Admin Operasional' }, { status: 403 });
   }
 

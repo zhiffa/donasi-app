@@ -33,7 +33,9 @@ export async function PATCH(
 ) {
   const auth = await verifyAdmin(request);
   if (!auth.isAdmin) return auth.response;
-  if (auth.jabatan !== 'Admin Program') {
+
+  // LOGIC BARU: Izinkan jika Admin Program ATAU Super Admin
+  if (auth.jabatan !== 'Admin Program' && auth.jabatan !== 'Super Admin') {
     return NextResponse.json({ message: 'Akses ditolak' }, { status: 403 });
   }
 

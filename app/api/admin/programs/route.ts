@@ -12,17 +12,22 @@ export async function GET(request: NextRequest) {
 
   const isAdminProgram = auth.jabatan === 'Admin Program';
   const isAdminOperasional = auth.jabatan === 'Admin Operasional';
+  const isSuperAdmin = auth.jabatan === 'Super Admin';
 
-  if (!isAdminProgram && !isAdminOperasional) {
+  if (!isAdminProgram && !isAdminOperasional && !isSuperAdmin) {
     return NextResponse.json({ message: 'Akses ditolak' }, { status: 403 });
   }
   
   try {
     let query = supabase.from('kegiatan').select('*');
 
-    // [UBAH] Filter 'Aktif' (bukan Berjalan) untuk dropdown Admin Operasional
-    if (isAdminOperasional && !isAdminProgram) {
-        query = query.eq('status', 'Aktif').select('id_kegiatan, nama_program, status');
+    // [PERBAIKAN DISINI]
+    // Sebelumnya: .select('id_kegiatan, nama_program, status') -> Poster tidak ikut terambil.
+    // Sekarang: Kita hapus .select(...) agar default mengambil semua kolom (*) termasuk url_poster.
+    
+    if (isAdminOperasional && !isAdminProgram && !isSuperAdmin) {
+        // Kita hanya filter statusnya saja agar hanya yang 'Aktif'
+        query = query.eq('status', 'Aktif'); 
     }
 
     const { data: programs, error } = await query.order('created_at', { ascending: false });
@@ -39,14 +44,18 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// --- 2. FUNGSI POST (Membuat kegiatan baru) ---
+// --- 2. FUNGSI POST (Tidak ada perubahan, tetap gunakan kode sebelumnya) ---
 export async function POST(request: NextRequest) {
+  // ... (Gunakan kode POST yang terakhir saya berikan) ...
+  // Biar tidak kepanjangan, bagian ini tidak saya tulis ulang karena tidak ada error di sini.
+  // Pastikan logic auth jabatannya sudah menyertakan Super Admin seperti sebelumnya.
   const auth = await verifyAdmin(request);
 
   if (!auth.isAdmin || !auth.userId) {
     return auth.response;
   }
-  if (auth.jabatan !== 'Admin Program') {
+  
+  if (auth.jabatan !== 'Admin Program' && auth.jabatan !== 'Super Admin') {
     return NextResponse.json({ message: 'Akses ditolak: Hanya Admin Program' }, { status: 403 });
   }
 
@@ -82,14 +91,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Parsing Target Dana
     let targetDana = 0;
     if (targetDanaInput) {
         const parsed = parseFloat(targetDanaInput.toString());
         if (!isNaN(parsed)) targetDana = parsed;
     }
 
-    // Upload Poster
     let posterUrl: string | null = null; 
     if (posterFile) {
       try {
@@ -117,7 +124,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // [UBAH] Insert status 'Aktif' (bukan Berjalan) agar sesuai ENUM DB
     const { error: insertError } = await supabase
       .from('kegiatan')
       .insert({
@@ -149,14 +155,15 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// --- 3. FUNGSI PATCH (Update Status) ---
+// --- 3. FUNGSI PATCH (Tidak ada perubahan) ---
 export async function PATCH(request: NextRequest) {
   const auth = await verifyAdmin(request);
 
   if (!auth.isAdmin) {
     return auth.response;
   }
-  if (auth.jabatan !== 'Admin Program') {
+  
+  if (auth.jabatan !== 'Admin Program' && auth.jabatan !== 'Super Admin') {
     return NextResponse.json({ message: 'Akses ditolak: Hanya Admin Program' }, { status: 403 });
   }
 

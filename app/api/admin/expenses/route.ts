@@ -9,7 +9,9 @@ export async function GET(request: NextRequest) {
   if (!auth.isAdmin) {
     return auth.response;
   }
-  if (auth.jabatan !== 'Admin Program') {
+  
+  // LOGIC BARU: Izinkan jika Admin Program ATAU Super Admin
+  if (auth.jabatan !== 'Admin Program' && auth.jabatan !== 'Super Admin') {
     return NextResponse.json({ message: 'Akses ditolak: Hanya Admin Program' }, { status: 403 });
   }
   
@@ -51,7 +53,9 @@ export async function POST(request: NextRequest) {
   if (!auth.isAdmin || !auth.userId) {
     return auth.response;
   }
-  if (auth.jabatan !== 'Admin Program') {
+  
+  // LOGIC BARU: Izinkan jika Admin Program ATAU Super Admin
+  if (auth.jabatan !== 'Admin Program' && auth.jabatan !== 'Super Admin') {
     return NextResponse.json({ message: 'Akses ditolak: Hanya Admin Program' }, { status: 403 });
   }
 
@@ -132,13 +136,14 @@ export async function POST(request: NextRequest) {
 }
 
 // --- 3. FUNGSI DELETE (Menghapus pengeluaran) ---
-// PENAMBAHAN BARU:
 export async function DELETE(request: NextRequest) {
   const auth = await verifyAdmin(request);
   
   // Validasi Admin & Jabatan
   if (!auth.isAdmin) return auth.response;
-  if (auth.jabatan !== 'Admin Program') {
+
+  // LOGIC BARU: Izinkan jika Admin Program ATAU Super Admin
+  if (auth.jabatan !== 'Admin Program' && auth.jabatan !== 'Super Admin') {
     return NextResponse.json({ message: 'Akses ditolak: Hanya Admin Program' }, { status: 403 });
   }
 
