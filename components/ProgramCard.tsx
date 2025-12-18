@@ -2,23 +2,18 @@
 import Link from 'next/link'
 import Image from 'next/image'
 
-interface ProgramCardProps {
-  id: number;
-  title: string;
-  description: string;
-  imageUrl: string;
-  target: number;
-  collected: number;
-}
-
-export default function ProgramCard({ id, title, description, imageUrl, target, collected }: ProgramCardProps) {
-  // Pastikan tipe data adalah number
-  const safeCollected = parseFloat(collected as any) || 0;
-  const safeTarget = parseFloat(target as any) || 0;
+export default function ProgramCard(props: any) {
+  // Ambil data dengan fallback jika nama properti berbeda
+  const id = props.id || props.id_kegiatan;
+  const title = props.title || props.nama_program;
+  const description = props.description || props.deskripsi;
+  const imageUrl = props.imageUrl || props.url_poster;
+  const target = parseFloat(props.target || props.target_dana) || 0;
+  const collected = parseFloat(props.collected || props.terkumpul) || 0;
 
   let percentage = 0;
-  if (safeTarget > 0) {
-    percentage = Math.round((safeCollected / safeTarget) * 100);
+  if (target > 0) {
+    percentage = Math.round((collected / target) * 100);
   }
   const displayPercentage = percentage > 100 ? 100 : percentage;
 
@@ -40,8 +35,8 @@ export default function ProgramCard({ id, title, description, imageUrl, target, 
           
           <div className="mb-4">
             <div className="mb-1.5 flex justify-between text-xs font-semibold">
-              <span className="text-gray-700 font-bold text-blue-600">
-                Rp {safeCollected.toLocaleString('id-ID')}
+              <span className="text-blue-600 font-bold">
+                Rp {collected.toLocaleString('id-ID')}
               </span>
               <span className="text-pink-600">{percentage}%</span>
             </div>
@@ -54,7 +49,7 @@ export default function ProgramCard({ id, title, description, imageUrl, target, 
             </div>
             
             <p className="text-right text-[10px] text-gray-400 mt-1 uppercase font-bold">
-              Target: Rp {safeTarget.toLocaleString('id-ID')}
+              Target: Rp {target.toLocaleString('id-ID')}
             </p>
           </div>
         </div>

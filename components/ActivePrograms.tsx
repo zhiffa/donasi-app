@@ -13,6 +13,7 @@ export default async function ActivePrograms() {
       deskripsi,
       url_poster,
       target_dana,
+      status,
       donasi (
         nominal,
         status
@@ -31,9 +32,9 @@ export default async function ActivePrograms() {
     );
   }
 
-  // 2. Kalkulasi nominal donasi
+  // 2. Mapping data agar Properti Nama sesuai dengan yang diharapkan UI
   const mappedPrograms = programs?.map((p: any) => {
-    // Filter status 'Diterima' dan jumlahkan nominal
+    // Hitung total nominal donasi yang statusnya 'Diterima'
     const totalTerkumpul = p.donasi
       ? p.donasi
           .filter((d: any) => String(d.status).trim() === 'Diterima') 
@@ -41,12 +42,19 @@ export default async function ActivePrograms() {
       : 0;
 
     return {
-      id: p.id_kegiatan,             // Database id_kegiatan -> Props id
-      title: p.nama_program,         // Database nama_program -> Props title
+      // Pastikan nama properti ini SAMA dengan yang ada di ProgramSlider / ProgramCard
+      id: p.id_kegiatan,             
+      id_kegiatan: p.id_kegiatan,    
+      title: p.nama_program,         
+      nama_program: p.nama_program,  
       description: p.deskripsi,
+      deskripsi: p.deskripsi,
       imageUrl: p.url_poster,
+      url_poster: p.url_poster,
       target: parseFloat(p.target_dana) || 0, 
-      collected: totalTerkumpul 
+      target_dana: parseFloat(p.target_dana) || 0,
+      collected: totalTerkumpul,
+      terkumpul: totalTerkumpul
     };
   }) || [];
 
@@ -56,7 +64,8 @@ export default async function ActivePrograms() {
     <div className="bg-white py-20">
       <div className="container mx-auto px-4 md:px-6">
         <h2 className="mb-12 text-center text-4xl font-bold text-gray-900">Program Donasi Aktif</h2>
-        <ProgramSlider programs={mappedPrograms as any} />
+        {/* Kirim data yang sudah di-mapping */}
+        <ProgramSlider programs={mappedPrograms} />
       </div>
     </div>
   );
