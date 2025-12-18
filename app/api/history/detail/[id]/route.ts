@@ -34,8 +34,8 @@ export async function GET(
       `)
       .eq('id_donasi', donationId)
       .eq('donatur.id_user', auth.userId) 
-      .limit(1)        // <--- PERBAIKAN 1: Pastikan cuma ambil 1
-      .maybeSingle();  // <--- PERBAIKAN 2: Pakai maybeSingle biar gak crash kalo data double/kosong
+      .limit(1)       
+      .maybeSingle(); 
 
     if (error) {
         console.error("DB Error (Main Data):", error.message);
@@ -59,8 +59,8 @@ export async function GET(
             .from('jadwal_penjemputan')
             .select('status_penjemputan, alamat_penjemputan, tanggal_penjemputan, jam_penjemputan')
             .eq('id_donasi', donationId)
-            .limit(1)       // <--- PERBAIKAN 3: Kunci ini. Kalo ada history jadwal, ambil 1 saja.
-            .maybeSingle(); // <--- PERBAIKAN 4: Ubah single() jadi maybeSingle()
+            .limit(1)     
+            .maybeSingle(); 
         
         // Log error tapi jangan bikin 500 (opsional, biar aplikasi tetep jalan walau jadwal error)
         if (jadwalError) {

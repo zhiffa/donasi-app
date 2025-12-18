@@ -3,7 +3,6 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-// Pastikan variabel ini ada
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY!;
 
@@ -16,26 +15,44 @@ export async function GET(
   const programId = params.programId;
 
   try {
-    // Versi Sederhana: Tanpa Join ke user/donatur dulu
-    // Kita hanya ambil data tabel 'donasi'
+    // 1. Tambahkan deskripsi_barang ke dalam select query
     const { data, error } = await supabaseAdmin
       .from('donasi')
-      .select('id_donasi, nominal, nama_barang, jenis_donasi, anonim, created_at, status')
+      .select(`
+        id_donasi, 
+        nominal, 
+        nama_barang, 
+        deskripsi_barang, 
+        jenis_donasi, 
+        anonim, 
+        created_at, 
+        status,
+        user (nama)
+      `)
       .eq('id_kegiatan', parseInt(programId))
-      .eq('status', 'Diterima') // Pastikan D besar
+      .eq('status', 'Diterima') 
       .order('created_at', { ascending: false });
 
     if (error) throw error;
 
-    // Mapping sederhana
-    const publicDonations = (data || []).map(d => ({
+    const publicDonations = (data || []).map(d => {
+      let displayNama = 'Hamba Allah';
+      
+      if (!d.anonim && d.user && (d.user as any).nama) {
+        displayNama = (d.user as any).nama;
+      }
+
+      return {
         id: d.id_donasi,
-        nama: d.anonim ? 'Hamba Allah' : 'Donatur', // Sementara hardcode dulu
+        nama: displayNama,
         nominal: d.nominal,
-        barang: d.nama_barang,
+        nama_barang: d.nama_barang,
+        deskripsi_barang: d.deskripsi_barang, // Pastikan mengambil kolom deskripsi_barang
         jenis: d.jenis_donasi,
-        tanggal: d.created_at
-    }));
+        tanggal: d.created_at,
+        status: d.status
+      };
+    });
 
     return NextResponse.json(publicDonations, { status: 200 });
   } catch (error: any) {
