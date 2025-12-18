@@ -11,8 +11,8 @@ import {
   LogOut,
   FolderOpen,
   Loader2,
-  Menu, // Icon Menu
-  X     // Icon Close
+  Menu, 
+  X 
 } from 'lucide-react'
 
 const menuItems = [
@@ -51,11 +51,7 @@ const menuItems = [
 export default function AdminSidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  
-  // --- STATE UNTUK MOBILE SIDEBAR ---
   const [isOpen, setIsOpen] = useState(false)
-  // ----------------------------------
-
   const [adminName, setAdminName] = useState('Admin User');
   const [adminEmail, setAdminEmail] = useState('admin@shine.org');
   const [adminJabatan, setAdminJabatan] = useState<string>('');
@@ -94,7 +90,6 @@ export default function AdminSidebar() {
 
   const toggleSidebar = () => setIsOpen(!isOpen)
 
-  // Tutup sidebar otomatis saat berpindah halaman di mobile
   useEffect(() => {
     setIsOpen(false)
   }, [pathname])
@@ -105,7 +100,7 @@ export default function AdminSidebar() {
 
   return (
     <>
-      {/* 1. TOMBOL HAMBURGER (Hanya muncul di Mobile) */}
+      {/* 1. TOMBOL HAMBURGER (Mobile Only) */}
       <button 
         onClick={toggleSidebar}
         className="fixed top-3 left-4 z-[60] flex h-10 w-10 items-center justify-center rounded-lg bg-white border shadow-md text-gray-600 md:hidden"
@@ -113,7 +108,7 @@ export default function AdminSidebar() {
         {isOpen ? <X size={24} /> : <Menu size={24} />}
       </button>
 
-      {/* 2. OVERLAY (Latar gelap saat sidebar buka di mobile) */}
+      {/* 2. OVERLAY (Mobile Only) */}
       {isOpen && (
         <div 
           className="fixed inset-0 z-[55] bg-black/40 backdrop-blur-sm md:hidden" 
@@ -121,15 +116,15 @@ export default function AdminSidebar() {
         />
       )}
 
-      {/* 3. ASIDE CORE (Sidebar) */}
+      {/* 3. ASIDE CORE (FIXED POSITION) */}
       <aside className={`
-        fixed inset-y-0 left-0 z-[58] flex w-64 flex-col bg-white border-r border-gray-200 h-screen transition-transform duration-300 ease-in-out
+        fixed inset-y-0 left-0 z-[50] flex w-64 flex-col bg-white border-r border-gray-200 h-screen transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-        md:translate-x-0 md:static
+        md:translate-x-0
       `}>
         
         {/* Header Sidebar */}
-        <div className="flex h-16 items-center justify-center border-b border-gray-100 px-6">
+        <div className="flex h-16 items-center justify-center border-b border-gray-100 px-6 shrink-0">
           <Link href="/" className="flex items-center gap-2">
                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">S</div>
                <span className="text-xl font-bold text-gray-800 tracking-tight">ShineAdmin</span>
@@ -144,7 +139,6 @@ export default function AdminSidebar() {
             <div className="flex flex-col gap-2 px-4 mt-4 text-gray-400 text-sm animate-pulse">
               <div className="h-8 bg-gray-100 rounded w-full"></div>
               <div className="h-8 bg-gray-100 rounded w-full"></div>
-              <div className="h-8 bg-gray-100 rounded w-full"></div>
               <span className="flex items-center gap-2 mt-2"><Loader2 className="animate-spin" size={16}/> Memuat...</span>
             </div>
           ) : filteredMenuItems.length === 0 ? (
@@ -155,7 +149,6 @@ export default function AdminSidebar() {
           ) : (
             filteredMenuItems.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
-              
               return (
                 <Link
                   key={item.name}
@@ -175,7 +168,7 @@ export default function AdminSidebar() {
         </div>
 
         {/* Footer Sidebar */}
-        <div className="border-t border-gray-100 p-4">
+        <div className="border-t border-gray-100 p-4 shrink-0">
           <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-gray-50 mb-2">
               <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold shrink-0">
                   {adminName.charAt(0).toUpperCase()}

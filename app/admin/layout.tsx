@@ -9,32 +9,27 @@ export default function AdminLayout({
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-900">
       
-      {/* Sidebar sekarang melayang (fixed) di mobile dan 
-          masuk ke dalam flow (static/fixed) di desktop 
-      */}
+      {/* Sidebar fixed di kiri */}
       <AdminSidebar />
 
-      {/* Main Content Area: 
-          - pl-0 di mobile agar konten full screen.
-          - md:pl-64 di desktop agar memberi ruang untuk sidebar.
+      {/* Main Content: 
+          Diberikan margin kiri (ml-64) pada layar desktop (md) 
+          agar konten tidak tertumpuk di bawah/belakang sidebar.
       */}
-      <div className="flex flex-col min-h-screen transition-all duration-300 md:pl-64">
+      <div className="flex flex-col min-h-screen transition-all duration-300 md:ml-64">
         
-        {/* Header Admin (Sticky/Fixed di dalam container ini) */}
+        {/* Header Admin */}
         <AdminHeader />
 
-        {/* Dynamic Page Content */}
+        {/* Isi Halaman Dashboard */}
         <main className="flex-1 p-4 md:p-8 overflow-x-hidden">
-            {/* Container max-w agar konten tidak terlalu melebar di layar ultra-wide 
-                dan tetap rapi di mobile.
-            */}
             <div className="max-w-7xl mx-auto w-full">
                {children}
             </div>
         </main>
 
         {/* Footer Admin */}
-        <footer className="border-t border-gray-200 bg-white py-6 px-6 md:px-10 text-center md:text-left">
+        <footer className="border-t border-gray-200 bg-white py-6 px-6 md:px-10 text-center md:text-left mt-auto">
            <p className="text-xs text-gray-400 font-medium">
              &copy; {new Date().getFullYear()} Shine in Smiles Admin Panel. 
              <span className="hidden sm:inline"> | Sistem Manajemen Donasi & Program</span>
