@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { supabase } from '@/lib/supabaseClient'; 
 import { verifyAdmin } from '@/lib/auth';
+import { revalidatePath } from 'next/cache';
 
-// --- 1. FUNGSI GET (Mengambil kegiatan) ---
+// --- 1. FUNGSI GET (Mengambil daftar kegiatan) ---
 export async function GET(request: NextRequest) {
   const auth = await verifyAdmin(request);
 
@@ -19,14 +20,11 @@ export async function GET(request: NextRequest) {
   }
   
   try {
+    // Mengambil semua kolom termasuk url_poster
     let query = supabase.from('kegiatan').select('*');
-
-    // [PERBAIKAN DISINI]
-    // Sebelumnya: .select('id_kegiatan, nama_program, status') -> Poster tidak ikut terambil.
-    // Sekarang: Kita hapus .select(...) agar default mengambil semua kolom (*) termasuk url_poster.
     
+    // Filter khusus untuk Admin Operasional hanya melihat yang aktif
     if (isAdminOperasional && !isAdminProgram && !isSuperAdmin) {
-        // Kita hanya filter statusnya saja agar hanya yang 'Aktif'
         query = query.eq('status', 'Aktif'); 
     }
 
@@ -37,18 +35,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(programs, { status: 200 });
   } catch (error) {
     console.error('[KEGIATAN_GET]', error);
-    return NextResponse.json(
-      { message: 'Internal Server Error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
   }
 }
 
-// --- 2. FUNGSI POST (Tidak ada perubahan, tetap gunakan kode sebelumnya) ---
+// --- 2. FUNGSI POST (Membuat kegiatan baru) ---
 export async function POST(request: NextRequest) {
-  // ... (Gunakan kode POST yang terakhir saya berikan) ...
-  // Biar tidak kepanjangan, bagian ini tidak saya tulis ulang karena tidak ada error di sini.
-  // Pastikan logic auth jabatannya sudah menyertakan Super Admin seperti sebelumnya.
   const auth = await verifyAdmin(request);
 
   if (!auth.isAdmin || !auth.userId) {
@@ -59,136 +51,125 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: 'Akses ditolak: Hanya Admin Program' }, { status: 403 });
   }
 
-  let adminId;
-  try {
-    const { data: adminData, error: adminError } = await supabase
-      .from('admin')
-      .select('id_admin')
-      .eq('id_user', auth.userId)
-      .single();
-      
-    if (adminError || !adminData) {
-        throw new Error('Data admin tidak ditemukan');
-    }
-    adminId = adminData.id_admin;
-  } catch (dbError) {
-     return NextResponse.json({ message: 'Gagal memverifikasi admin' }, { status: 500 });
-  }
-  
   try {
     const formData = await request.formData();
-
     const name = formData.get('name') as string;
     const description = formData.get('description') as string;
     const startDate = formData.get('startDate') as string;
     const targetDanaInput = formData.get('targetDana'); 
     const posterFile = formData.get('poster') as File | null;
 
-    if (!name || !startDate) {
-      return NextResponse.json(
-        { message: 'Nama kegiatan dan tanggal mulai harus diisi' },
-        { status: 400 }
-      );
-    }
+    // Ambil ID Admin berdasarkan ID User dari auth
+    const { data: adminData } = await supabase
+      .from('admin')
+      .select('id_admin')
+      .eq('id_user', auth.userId)
+      .single();
 
-    let targetDana = 0;
-    if (targetDanaInput) {
-        const parsed = parseFloat(targetDanaInput.toString());
-        if (!isNaN(parsed)) targetDana = parsed;
-    }
+    if (!adminData) throw new Error('Data admin tidak ditemukan');
 
     let posterUrl: string | null = null; 
     if (posterFile) {
-      try {
-        const buffer = Buffer.from(await posterFile.arrayBuffer());
-        const safeFilename = posterFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const uniqueFilename = `${Date.now()}_${safeFilename}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('posters') 
-          .upload(uniqueFilename, buffer, {
-            contentType: posterFile.type,
-            upsert: false,
-          });
+      const buffer = Buffer.from(await posterFile.arrayBuffer());
+      const safeFilename = posterFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const uniqueFilename = `${Date.now()}_${safeFilename}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('posters') 
+        .upload(uniqueFilename, buffer, { contentType: posterFile.type });
 
-        if (uploadError) throw new Error('Gagal mengunggah poster: ' + uploadError.message);
-
-        const { data: publicUrlData } = supabase.storage
-          .from('posters')
-          .getPublicUrl(uniqueFilename);
-
+      if (!uploadError) {
+        const { data: publicUrlData } = supabase.storage.from('posters').getPublicUrl(uniqueFilename);
         posterUrl = publicUrlData.publicUrl;
-      } catch (uploadError) {
-        console.error('[FILE_UPLOAD_CATCH]', uploadError);
-        posterUrl = null; 
       }
     }
 
-    const { error: insertError } = await supabase
-      .from('kegiatan')
-      .insert({
-        id_admin: adminId,
-        nama_program: name,
-        deskripsi: description || null,
-        tanggal_mulai: startDate,
-        url_poster: posterUrl,
-        target_dana: targetDana,
-        status: 'Aktif' 
-      });
+    const { error: insertError } = await supabase.from('kegiatan').insert({
+      id_admin: adminData.id_admin,
+      nama_program: name,
+      deskripsi: description || null,
+      tanggal_mulai: startDate,
+      url_poster: posterUrl,
+      target_dana: parseFloat(targetDanaInput?.toString() || '0'),
+      status: 'Aktif' 
+    });
 
-    if (insertError) {
-        console.error('[SUPABASE_INSERT_ERROR]', insertError);
-        throw new Error(insertError.message || 'Gagal menyimpan ke database');
-    }
+    if (insertError) throw insertError;
 
-    return NextResponse.json(
-      { message: 'Kegiatan berhasil dibuat' },
-      { status: 201 }
-    );
+    revalidatePath('/');
+    return NextResponse.json({ message: 'Kegiatan berhasil dibuat' }, { status: 201 });
   } catch (error: any) {
     console.error('[KEGIATAN_POST]', error);
-    const errorMessage = error?.message || (typeof error === 'string' ? error : 'Terjadi kesalahan sistem');
-    return NextResponse.json(
-      { message: `Gagal Menyimpan: ${errorMessage}` },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: `Gagal: ${error.message}` }, { status: 500 });
   }
 }
 
-// --- 3. FUNGSI PATCH (Tidak ada perubahan) ---
+// --- 3. FUNGSI PATCH (Edit kegiatan & ganti poster) ---
 export async function PATCH(request: NextRequest) {
   const auth = await verifyAdmin(request);
 
-  if (!auth.isAdmin) {
-    return auth.response;
-  }
-  
+  if (!auth.isAdmin) return auth.response;
   if (auth.jabatan !== 'Admin Program' && auth.jabatan !== 'Super Admin') {
-    return NextResponse.json({ message: 'Akses ditolak: Hanya Admin Program' }, { status: 403 });
+    return NextResponse.json({ message: 'Akses ditolak' }, { status: 403 });
   }
 
   try {
-    const body = await request.json();
-    const { id, status } = body; 
+    const formData = await request.formData();
+    const id = formData.get('id') as string;
+    const status = formData.get('status') as string;
+    const name = formData.get('name') as string;
+    const description = formData.get('description') as string;
+    const targetDanaInput = formData.get('targetDana');
+    const posterFile = formData.get('poster') as File | null;
 
-    if (!id || !status) {
-       return NextResponse.json({ message: 'ID Program dan Status baru diperlukan' }, { status: 400 });
+    if (!id) return NextResponse.json({ message: 'ID diperlukan' }, { status: 400 });
+
+    // Cek data lama untuk menghapus poster lama jika ada penggantian
+    const { data: oldData } = await supabase
+      .from('kegiatan')
+      .select('url_poster')
+      .eq('id_kegiatan', id)
+      .single();
+
+    let posterUrl = oldData?.url_poster;
+
+    if (posterFile && typeof posterFile !== 'string') {
+      // Hapus file lama dari Storage
+      if (oldData?.url_poster) {
+        const oldFilename = oldData.url_poster.split('/').pop();
+        if (oldFilename) await supabase.storage.from('posters').remove([oldFilename]);
+      }
+
+      // Upload file baru
+      const buffer = Buffer.from(await posterFile.arrayBuffer());
+      const uniqueFilename = `${Date.now()}_${posterFile.name.replace(/\s/g, '_')}`;
+      const { error: upErr } = await supabase.storage.from('posters').upload(uniqueFilename, buffer, {
+        contentType: posterFile.type,
+        upsert: true
+      });
+
+      if (!upErr) {
+        posterUrl = supabase.storage.from('posters').getPublicUrl(uniqueFilename).data.publicUrl;
+      }
     }
 
-    const { error } = await supabase
-      .from('kegiatan')
-      .update({ status: status }) 
-      .eq('id_kegiatan', id);
+    const updatePayload: any = {};
+    if (status) updatePayload.status = status;
+    if (name) updatePayload.nama_program = name;
+    if (description) updatePayload.deskripsi = description;
+    if (posterUrl) updatePayload.url_poster = posterUrl;
+    if (targetDanaInput) updatePayload.target_dana = parseFloat(targetDanaInput.toString());
 
+    const { error } = await supabase.from('kegiatan').update(updatePayload).eq('id_kegiatan', id);
     if (error) throw error;
 
-    return NextResponse.json({ message: 'Status program berhasil diperbarui' }, { status: 200 });
+    revalidatePath('/');
+    revalidatePath(`/programs/${id}`);
+    revalidatePath(`/live-reports/${id}`);
 
-  } catch (error) {
+    return NextResponse.json({ message: 'Program berhasil diperbarui' }, { status: 200 });
+  } catch (error: any) {
     console.error('[KEGIATAN_PATCH]', error);
-    return NextResponse.json(
-      { message: 'Gagal memperbarui status program' },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'Gagal memperbarui program' }, { status: 500 });
   }
 }
