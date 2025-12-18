@@ -7,28 +7,28 @@ interface PublicDonation {
   id: number;
   nama: string;
   nominal: number | null;
-  barang: string | null;
+  nama_barang: string | null; // Pastikan menggunakan nama kolom asli DB
   jenis: 'Uang' | 'Barang';
   tanggal: string;
-  status: string;
 }
 
 export default function DonasiMasuk({ programId }: { programId: string }) {
   const [donations, setDonations] = useState<PublicDonation[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fungsi fetch data dari API
   const fetchDonations = async () => {
     try {
+      // Menambahkan timestamp agar browser tidak menggunakan cache lama
       const res = await fetch(`/api/public/donations/${programId}?t=${Date.now()}`, {
         cache: 'no-store'
       });
+      
       if (res.ok) {
         const data = await res.json();
         setDonations(data);
       }
     } catch (error) {
-      console.error("Failed to fetch public donations:", error);
+      console.error("Gagal fetch donasi:", error);
     } finally {
       setLoading(false);
     }
@@ -37,19 +37,20 @@ export default function DonasiMasuk({ programId }: { programId: string }) {
   useEffect(() => {
     fetchDonations();
 
-    // Setup Realtime Subscription
+    // REALTIME SUBSCRIPTION
     const channel = supabase
       .channel(`live_donations_${programId}`)
       .on(
         'postgres_changes',
         {
-          event: '*', 
+          event: '*', // Menangkap Insert dan Update
           schema: 'public',
           table: 'donasi',
           filter: `id_kegiatan=eq.${programId}`
         },
-        () => {
-          // Ketika ada perubahan status di database, tarik data terbaru
+        (payload) => {
+          // Jika status berubah menjadi 'Diterima', langsung update list
+          console.log("Realtime Update:", payload);
           fetchDonations();
         }
       )
@@ -71,9 +72,7 @@ export default function DonasiMasuk({ programId }: { programId: string }) {
       
       <div className="p-0 max-h-[500px] overflow-y-auto">
         {loading ? (
-          <div className="p-8 flex justify-center">
-            <Loader2 className="animate-spin text-blue-500" />
-          </div>
+          <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-blue-500" /></div>
         ) : donations.length === 0 ? (
           <div className="p-8 text-center text-gray-500 italic">Belum ada donasi terverifikasi.</div>
         ) : (
@@ -83,19 +82,28 @@ export default function DonasiMasuk({ programId }: { programId: string }) {
                 <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 shrink-0 border border-gray-200">
                   <User size={20} />
                 </div>
+                
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 truncate">{d.nama}</p>
                   <p className="text-xs text-gray-500">
                     {new Date(d.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </p>
                 </div>
+                
                 <div className="text-right shrink-0">
-                  {d.jenis === 'Uang' ? (
-                    <span className="font-bold text-green-600 block">+ Rp {Number(d.nominal).toLocaleString('id-ID')}</span>
+                  {/* LOGIKA PENAMPILAN: Prioritaskan nama_barang jika jenisnya Barang */}
+                  {d.jenis === 'Barang' ? (
+                    <span className="font-bold text-orange-600 block text-sm max-w-[120px] truncate" title={d.nama_barang || ''}>
+                      {d.nama_barang || 'Barang'}
+                    </span>
                   ) : (
-                    <span className="font-bold text-orange-600 block text-sm max-w-[120px] truncate">{d.barang}</span>
+                    <span className="font-bold text-green-600 block">
+                      + Rp {Number(d.nominal).toLocaleString('id-ID')}
+                    </span>
                   )}
-                  <span className="text-[10px] text-gray-400 font-bold uppercase bg-gray-100 px-2 py-0.5 rounded">{d.jenis}</span>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase bg-gray-100 px-2 py-0.5 rounded">
+                    {d.jenis}
+                  </span>
                 </div>
               </li>
             ))}
