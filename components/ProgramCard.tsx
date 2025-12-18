@@ -11,16 +11,8 @@ interface ProgramCardProps {
   collected: number;
 }
 
-export default function ProgramCard({ 
-  id, 
-  title, 
-  description, 
-  imageUrl, 
-  target, 
-  collected 
-}: ProgramCardProps) {
-  
-  // Pastikan diproses sebagai angka murni
+export default function ProgramCard({ id, title, description, imageUrl, target, collected }: ProgramCardProps) {
+  // Pastikan tipe data adalah number
   const safeCollected = parseFloat(collected as any) || 0;
   const safeTarget = parseFloat(target as any) || 0;
 
@@ -28,16 +20,15 @@ export default function ProgramCard({
   if (safeTarget > 0) {
     percentage = Math.round((safeCollected / safeTarget) * 100);
   }
-
   const displayPercentage = percentage > 100 ? 100 : percentage;
 
   return (
-    <div className="overflow-hidden rounded-3xl bg-white shadow-lg flex flex-col h-full border border-gray-100 transition-transform hover:scale-[1.01]">
+    <div className="overflow-hidden rounded-3xl bg-white shadow-lg flex flex-col h-full border border-gray-100 transition-all hover:shadow-xl">
       <div className="relative aspect-square w-full">
-        <Image
+        <Image 
           src={imageUrl || 'https://via.placeholder.com/400x400?text=No+Image'} 
-          alt={title || 'Program Image'} 
-          fill
+          alt={title || 'Program'} 
+          fill 
           className="object-cover" 
         />
       </div>
@@ -49,18 +40,20 @@ export default function ProgramCard({
           
           <div className="mb-4">
             <div className="mb-1.5 flex justify-between text-xs font-semibold">
-              <span className="text-gray-700">Terkumpul: <strong>Rp {safeCollected.toLocaleString('id-ID')}</strong></span>
+              <span className="text-gray-700 font-bold text-blue-600">
+                Rp {safeCollected.toLocaleString('id-ID')}
+              </span>
               <span className="text-pink-600">{percentage}%</span>
             </div>
             
             <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
               <div 
-                className="h-2 rounded-full bg-pink-500 transition-all duration-1000 ease-out" 
+                className="h-2 rounded-full bg-pink-500 transition-all duration-1000" 
                 style={{ width: `${displayPercentage}%` }}
               ></div>
             </div>
             
-            <p className="text-right text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-wider">
+            <p className="text-right text-[10px] text-gray-400 mt-1 uppercase font-bold">
               Target: Rp {safeTarget.toLocaleString('id-ID')}
             </p>
           </div>
@@ -68,11 +61,11 @@ export default function ProgramCard({
 
         <Link 
           href={`/programs/${id}`} 
-          className="block w-full rounded-full bg-pink-100 py-2.5 text-center text-sm font-bold text-pink-700 transition-colors hover:bg-pink-200"
+          className="block w-full rounded-full bg-blue-50 py-2.5 text-center text-sm font-bold text-blue-700 hover:bg-blue-600 hover:text-white transition-all"
         >
-          Donate Now
+          Donasi Sekarang
         </Link>
       </div>
     </div>
-  )
+  );
 }
