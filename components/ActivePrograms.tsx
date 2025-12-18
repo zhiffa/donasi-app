@@ -1,77 +1,91 @@
-import ProgramSlider from '@/components/ProgramSlider'; 
-import { AlertCircle } from 'lucide-react';
-import { supabase } from '@/lib/supabaseClient'; 
+'use client'
+import { useState, useEffect } from 'react'
+import { User, Loader2 } from 'lucide-react'
 
-export const revalidate = 0;
-export default async function ActivePrograms() {
-  
-  // 1. Ambil data dari tabel 'kegiatan' join 'donasi'
-  const { data: programs, error } = await supabase
-    .from('kegiatan')
-    .select(`
-      id_kegiatan,
-      nama_program,
-      deskripsi,
-      url_poster,
-      target_dana,
-      status,
-      donasi (
-        nominal,
-        status
-      )
-    `)
-    .eq('status', 'Aktif')
-    .order('created_at', { ascending: false });
+interface PublicDonation {
+  id: number;
+  nama: string;
+  nominal: number | null;
+  barang: string | null;
+  jenis: 'Uang' | 'Barang';
+  tanggal: string;
+}
 
-  if (error) {
-    console.error('[FETCH_ERROR]', error);
-    return (
-      <div className="bg-white py-20 text-center text-red-600">
-        <AlertCircle className="mx-auto h-12 w-12" />
-        <h2 className="mt-4 text-2xl font-bold">Gagal memuat data</h2>
-      </div>
-    );
-  }
+export default function DonasiMasuk({ programId }: { programId: string }) {
+  const [donations, setDonations] = useState<PublicDonation[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // 2. Mapping data agar Properti Nama sesuai dengan yang diharapkan UI
-  const mappedPrograms = programs?.map((p: any) => {
-    // Hitung total nominal donasi yang statusnya 'Diterima'
-    const totalTerkumpul = p.donasi
-      ? p.donasi
-          .filter((d: any) => String(d.status).trim() === 'Diterima') 
-          .reduce((sum: number, d: any) => sum + (parseFloat(d.nominal) || 0), 0)
-      : 0;
-
-    return {
-      // Pastikan nama properti ini SAMA dengan yang ada di ProgramSlider / ProgramCard
-      id: p.id_kegiatan,             
-      id_kegiatan: p.id_kegiatan,    
-      title: p.nama_program,         
-      nama_program: p.nama_program,  
-      description: p.deskripsi,
-      deskripsi: p.deskripsi,
-      imageUrl: p.url_poster,
-      url_poster: p.url_poster,
-      target: parseFloat(p.target_dana) || 0, 
-      target_dana: parseFloat(p.target_dana) || 0,
-      collected: totalTerkumpul,
-      terkumpul: totalTerkumpul
+  useEffect(() => {
+    const fetchDonations = async () => {
+      try {
+        // Gunakan timestamp agar browser mengabaikan cache lokal
+        const res = await fetch(`/api/public/donations/${programId}?t=${Date.now()}`, {
+            cache: 'no-store'
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          setDonations(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch public donations", error);
+      } finally {
+        setLoading(false);
+      }
     };
-  }) || [];
 
-  if (mappedPrograms.length === 0) return null;
+    fetchDonations();
+    
+    // Interval 5 detik agar user merasa laporan benar-benar "Live"
+    const interval = setInterval(fetchDonations, 5000);
+    return () => clearInterval(interval);
+
+  }, [programId]);
 
   return (
-    <div className="bg-white py-20">
-      <div className="container mx-auto px-4 md:px-6">
-        <h2 className="mb-12 text-center text-4xl font-bold text-gray-900">Program Donasi Aktif</h2>
-        {/* Kirim data yang sudah di-mapping */}
-        <ProgramSlider programs={mappedPrograms} />
+    <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden h-full">
+      <div className="bg-blue-50 p-4 border-b border-blue-100">
+        <h3 className="text-lg font-bold text-blue-800 flex items-center gap-2">
+          <span className="bg-blue-200 text-blue-700 py-1 px-2 rounded text-xs">{donations.length}</span>
+          Donasi Masuk
+        </h3>
+      </div>
+      
+      <div className="p-0 max-h-[500px] overflow-y-auto">
+        {loading ? (
+          <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-gray-400"/></div>
+        ) : donations.length === 0 ? (
+          <div className="p-8 text-center text-gray-500">Belum ada donasi masuk.</div>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {donations.map((d) => (
+              <li key={d.id} className="p-4 hover:bg-gray-50 transition flex items-center gap-4">
+                <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 shrink-0">
+                  <User size={20} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900 truncate">{d.nama}</p>
+                  <p className="text-xs text-gray-500">
+                    {new Date(d.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  {d.jenis === 'Uang' ? (
+                    <span className="font-bold text-green-600 block">
+                      + Rp {Number(d.nominal).toLocaleString('id-ID')}
+                    </span>
+                  ) : (
+                    <span className="font-bold text-orange-600 block text-sm max-w-[120px] truncate" title={d.barang || ''}>
+                      {d.barang}
+                    </span>
+                  )}
+                  <span className="text-[10px] text-gray-400 uppercase bg-gray-100 px-1 rounded">{d.jenis}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
-}
-
-export function ActiveProgramsSkeleton() {
-  return <div className="py-20 text-center animate-pulse text-gray-400 font-bold">Memuat Program...</div>;
 }

@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 
-// Impor komponen-komponen yang sudah dibuat
 import MyDonationStatus from '@/components/MyDonationStatus'
 import DonasiMasuk from '@/components/DonasiMasuk'
 import PengeluaranDana from '@/components/PengeluaranDana'
