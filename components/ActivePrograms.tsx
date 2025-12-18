@@ -33,10 +33,12 @@ export default async function ActivePrograms() {
 
   // 2. Mapping data untuk menghitung total donasi dengan status 'Diterima'
   const mappedPrograms = programs?.map((p: any) => {
+    // Menghitung total nominal dengan konversi eksplisit ke Float 
+    // untuk menangani tipe data Numeric dari PostgreSQL
     const totalTerkumpul = p.donasi
       ? p.donasi
-          .filter((d: any) => d.status === 'Diterima') // Filter donasi yang sudah diverifikasi (Diterima)
-          .reduce((sum: number, d: any) => sum + (Number(d.nominal) || 0), 0)
+          .filter((d: any) => String(d.status).trim() === 'Diterima') 
+          .reduce((sum: number, d: any) => sum + (parseFloat(d.nominal) || 0), 0)
       : 0;
 
     return {
@@ -44,8 +46,9 @@ export default async function ActivePrograms() {
       nama_program: p.nama_program,
       deskripsi: p.deskripsi,
       url_poster: p.url_poster,
-      target: Number(p.target_dana) || 0, // Mapping ke 'target' untuk ProgramCard
-      collected: totalTerkumpul           // Mapping ke 'collected' untuk ProgramCard
+      // Pastikan target diproses sebagai angka agar progres bar bisa dihitung
+      target: parseFloat(p.target_dana) || 0, 
+      collected: totalTerkumpul           
     };
   }) || [];
 
@@ -77,7 +80,7 @@ export default async function ActivePrograms() {
   );
 }
 
-// --- Skeleton (UI Loading) - DITAMBAHKAN UNTUK MEMPERBAIKI ERROR BUILD VERCEL ---
+// --- Skeleton (UI Loading) ---
 export function ActiveProgramsSkeleton() {
   return (
     <div className="bg-white py-20">
