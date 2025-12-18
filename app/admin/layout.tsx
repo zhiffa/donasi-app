@@ -9,26 +9,35 @@ export default function AdminLayout({
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-900">
       
-      {/* Sidebar (Fixed Position) */}
+      {/* Sidebar sekarang melayang (fixed) di mobile dan 
+          masuk ke dalam flow (static/fixed) di desktop 
+      */}
       <AdminSidebar />
 
-      {/* Main Content Area */}
-      <div className="md:pl-64 flex flex-col min-h-screen transition-all duration-300">
+      {/* Main Content Area: 
+          - pl-0 di mobile agar konten full screen.
+          - md:pl-64 di desktop agar memberi ruang untuk sidebar.
+      */}
+      <div className="flex flex-col min-h-screen transition-all duration-300 md:pl-64">
         
-        {/* Panggil Komponen Header Dinamis */}
+        {/* Header Admin (Sticky/Fixed di dalam container ini) */}
         <AdminHeader />
 
         {/* Dynamic Page Content */}
-        <main className="flex-1 p-6 md:p-8 overflow-x-hidden">
-           <div className="max-w-7xl mx-auto">
-              {children}
-           </div>
+        <main className="flex-1 p-4 md:p-8 overflow-x-hidden">
+            {/* Container max-w agar konten tidak terlalu melebar di layar ultra-wide 
+                dan tetap rapi di mobile.
+            */}
+            <div className="max-w-7xl mx-auto w-full">
+               {children}
+            </div>
         </main>
 
         {/* Footer Admin */}
-        <footer className="border-t border-gray-200 bg-white py-4 px-8 text-center md:text-left">
-           <p className="text-xs text-gray-400">
-              &copy; {new Date().getFullYear()} Shine in Smiles Admin Panel. All rights reserved.
+        <footer className="border-t border-gray-200 bg-white py-6 px-6 md:px-10 text-center md:text-left">
+           <p className="text-xs text-gray-400 font-medium">
+             &copy; {new Date().getFullYear()} Shine in Smiles Admin Panel. 
+             <span className="hidden sm:inline"> | Sistem Manajemen Donasi & Program</span>
            </p>
         </footer>
       </div>
