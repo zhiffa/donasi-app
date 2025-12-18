@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabaseClient';
 import { snap } from '@/lib/midtrans';
+import { revalidatePath } from 'next/cache'; // Pastikan import ini ada
 
-// Webhook harus publik (tanpa auth user)
 export async function POST(request: Request) {
   try {
     const notificationJson = await request.json();
-
-    // 1. Verifikasi notifikasi dari Midtrans SDK
     // @ts-ignore
     const statusResponse = await snap.transaction.notification(notificationJson);
     
@@ -15,53 +13,51 @@ export async function POST(request: Request) {
     const transactionStatus = statusResponse.transaction_status;
     const fraudStatus = statusResponse.fraud_status;
 
-    console.log(`Midtrans Notification: ${orderId} | Status: ${transactionStatus}`);
-
-    // Extract ID Donasi dari Order ID (Format: DONASI-[ID]-[TIMESTAMP])
     const donationId = orderId.split('-')[1];
 
     if (!donationId) {
         return NextResponse.json({ message: 'Invalid Order ID' }, { status: 400 });
     }
 
-    // 2. Tentukan Status Baru berdasarkan respon Midtrans
-    let newStatus = '';
+    // --- LOGIKA MENDAPATKAN ID KEGIATAN ---
+    // Kita butuh ID Kegiatan untuk revalidate path detail program
+    // Ambil data donasi sebentar untuk tahu ini donasi buat program apa
+    const { data: donationData } = await supabase
+        .from('donasi')
+        .select('id_kegiatan')
+        .eq('id_donasi', donationId)
+        .single();
 
-    if (transactionStatus == 'capture') {
-      if (fraudStatus == 'challenge') {
-        newStatus = 'Pending'; 
-      } else if (fraudStatus == 'accept') {
-        newStatus = 'Diterima';
-      }
-    } else if (transactionStatus == 'settlement') {
-      // Uang sudah masuk (Sukses)
+    let newStatus = '';
+    // ... (logika penentuan status sama seperti sebelumnya)
+    if (transactionStatus == 'settlement' || (transactionStatus == 'capture' && fraudStatus == 'accept')) {
       newStatus = 'Diterima';
-    } else if (transactionStatus == 'cancel' || transactionStatus == 'deny' || transactionStatus == 'expire') {
-      // Gagal / Kadaluarsa
+    } else if (['cancel', 'deny', 'expire'].includes(transactionStatus)) {
       newStatus = 'Ditolak'; 
-    } else if (transactionStatus == 'pending') {
-      newStatus = 'Pending';
     }
 
-    // 3. Update Database Supabase
     if (newStatus === 'Diterima' || newStatus === 'Ditolak') {
         const { error } = await supabase
             .from('donasi')
-            .update({ 
-                status: newStatus,
-                // Jika ditolak sistem, simpan alasannya
-                rejection_reason: newStatus === 'Ditolak' ? `Pembayaran ${transactionStatus}` : null
-            })
+            .update({ status: newStatus })
             .eq('id_donasi', donationId);
 
-        if (error) {
-            console.error('Gagal update status donasi:', error);
-            throw error;
+        if (!error) {
+            // 1. Revalidasi Halaman Beranda (ActivePrograms)
+            revalidatePath('/'); 
+
+            // 2. Revalidasi Halaman Detail Program
+            if (donationData?.id_kegiatan) {
+                revalidatePath(`/programs/${donationData.id_kegiatan}`);
+                // URL live report
+                revalidatePath(`/live-reports/${donationData.id_kegiatan}`);
+            }
+
+            console.log(`Revalidated paths for program: ${donationData?.id_kegiatan}`);
         }
     }
 
     return NextResponse.json({ message: 'OK' });
-
   } catch (error) {
     console.error('[MIDTRANS_WEBHOOK_ERROR]', error);
     return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });

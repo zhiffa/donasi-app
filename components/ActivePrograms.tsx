@@ -2,6 +2,7 @@ import ProgramSlider from '@/components/ProgramSlider';
 import { AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient'; 
 
+export const revalidate = 0;
 export default async function ActivePrograms() {
   
   // 1. Ambil data dari tabel 'kegiatan' join 'donasi'
