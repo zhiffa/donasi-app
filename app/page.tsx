@@ -5,7 +5,7 @@ import Hero from '@/components/Hero'
 import AboutUs from '@/components/AboutUs'
 import Achievements from '@/components/Achievements'
 import ActivePrograms, { ActiveProgramsSkeleton } from '@/components/ActivePrograms'
-import FinishedPrograms from '@/components/FinishedPrograms' // <-- 1. Import ini
+import FinishedPrograms from '@/components/FinishedPrograms' 
 import Gallery from '@/components/Gallery'
 import GetInTouch from '@/components/GetInTouch'
 
