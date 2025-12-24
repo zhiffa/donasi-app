@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Loader2, X, Trash2, Filter } from 'lucide-react'
+// Tambahkan icon Download
+import { Plus, Loader2, X, Trash2, Filter, Download } from 'lucide-react'
 
 // --- Interfaces ---
 interface Program {
@@ -70,7 +71,11 @@ export default function ExpensesPage() {
       const programsData: Program[] = await programsRes.json();
 
       setExpenses(expensesData);
-      setPrograms(programsData.filter(p => p.status === 'Aktif'));
+      
+      // PERUBAHAN 1: Jangan difilter di sini. Simpan SEMUA program (Aktif & Selesai)
+      // agar filter utama bisa menampilkan program lama untuk keperluan export history.
+      setPrograms(programsData); 
+
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -88,6 +93,46 @@ export default function ExpensesPage() {
     if (selectedProgramId === 'null') return exp.id_kegiatan === null;
     return exp.id_kegiatan?.toString() === selectedProgramId;
   });
+
+  // --- PERUBAHAN 2: Handle Export CSV ---
+  const handleExportCSV = () => {
+    if (filteredExpenses.length === 0) {
+      alert('Tidak ada data untuk diekspor');
+      return;
+    }
+
+    // Header CSV
+    const headers = ['Tanggal', 'Program Terkait', 'Keterangan', 'Jenis', 'Nominal (Rp)', 'Detail Barang', 'Diinput Oleh'];
+    
+    // Convert data ke string CSV
+    const csvRows = filteredExpenses.map(exp => {
+      // Handle koma dalam teks agar tidak merusak format CSV (bungkus pakai kutip)
+      const cleanDesc = `"${exp.deskripsi.replace(/"/g, '""')}"`; 
+      const cleanProgram = exp.nama_program ? `"${exp.nama_program.replace(/"/g, '""')}"` : '"Non-Program"';
+      const cleanItem = exp.item_details ? `"${exp.item_details.replace(/"/g, '""')}"` : '-';
+      
+      return [
+        exp.tanggal,
+        cleanProgram,
+        cleanDesc,
+        exp.type.toUpperCase(),
+        exp.type === 'uang' ? exp.nominal : 0,
+        cleanItem,
+        exp.nama_admin
+      ].join(',');
+    });
+
+    const csvString = [headers.join(','), ...csvRows].join('\n');
+    
+    // Trigger download
+    const blob = new Blob([csvString], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `laporan-pengeluaran-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
 
   // --- Handlers ---
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -123,15 +168,12 @@ export default function ExpensesPage() {
     }
   };
 
-  // --- PERBAIKAN: HANDLE DELETE YANG TERHUBUNG KE API ---
   const handleDelete = async (id: number) => {
-    // 1. Konfirmasi User
     if (!confirm('Apakah Anda yakin ingin menghapus data pengeluaran ini? Tindakan ini tidak dapat dibatalkan.')) {
       return;
     }
 
     try {
-      // 2. Panggil API Delete
       const res = await fetch(`/api/admin/expenses?id=${id}`, {
         method: 'DELETE',
       });
@@ -142,7 +184,6 @@ export default function ExpensesPage() {
         throw new Error(data.message || 'Gagal menghapus data');
       }
 
-      // 3. Sukses: Refresh tabel
       alert('Data berhasil dihapus!');
       fetchExpensesAndPrograms(); 
 
@@ -193,13 +234,25 @@ export default function ExpensesPage() {
             >
               <option value="">Semua Program</option>
               <option value="null">-- Non-Program --</option>
+              {/* Di sini semua program muncul (termasuk yang selesai) agar bisa difilter & diekspor */}
               {programs.map((prog) => (
                 <option key={prog.id_kegiatan} value={prog.id_kegiatan}>
-                  {prog.nama_program}
+                  {prog.nama_program} {prog.status !== 'Aktif' ? `(${prog.status})` : ''}
                 </option>
               ))}
             </select>
           </div>
+
+          {/* PERUBAHAN 3: Tombol Export */}
+          <button
+            onClick={handleExportCSV}
+            disabled={filteredExpenses.length === 0}
+            className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white font-medium py-2 px-4 rounded-lg transition duration-200 shadow-sm whitespace-nowrap"
+            title="Export data ke CSV (Excel)"
+          >
+            <Download size={20} />
+            <span className="hidden sm:inline">Export</span>
+          </button>
 
           {/* Add Button */}
           <button
@@ -313,12 +366,19 @@ export default function ExpensesPage() {
                   className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 px-3"
                 >
                   <option value="">-- Tidak Terkait Program --</option>
-                  {programs.map(program => (
-                    <option key={program.id_kegiatan} value={program.id_kegiatan}>{program.nama_program}</option>
+                  
+                  {/* PERUBAHAN 4: Hanya tampilkan program AKTIF di form input */}
+                  {programs
+                    .filter(p => p.status === 'Aktif')
+                    .map(program => (
+                      <option key={program.id_kegiatan} value={program.id_kegiatan}>
+                        {program.nama_program}
+                      </option>
                   ))}
                 </select>
               </div>
 
+              {/* ... SISA FORM TIDAK BERUBAH SAMA SEKALI ... */}
               <div>
                 <label htmlFor="exp-date" className="block text-sm font-medium text-gray-700 mb-1">Tanggal</label>
                 <input
