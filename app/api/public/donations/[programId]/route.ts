@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// Paksa agar tidak dicache (selalu ambil data terbaru)
 export const dynamic = 'force-dynamic';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -15,7 +16,8 @@ export async function GET(
   const programId = params.programId;
 
   try {
-    // 1. Tambahkan deskripsi_barang ke dalam select query
+    // --- PERBAIKAN QUERY DISINI ---
+    // Kita ambil nama user MELALUI tabel 'donatur', bukan langsung ke user.
     const { data, error } = await supabaseAdmin
       .from('donasi')
       .select(`
@@ -27,19 +29,29 @@ export async function GET(
         anonim, 
         created_at, 
         status,
-        user (nama)
+        donatur (
+          user (
+            nama
+          )
+        )
       `)
       .eq('id_kegiatan', parseInt(programId))
-      .eq('status', 'Diterima') 
+      .eq('status', 'Diterima') // Pastikan status ini sesuai (huruf besar 'D')
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error("Supabase Error Full:", error); // Cek terminal VSCode jika masih error
+      throw error;
+    }
 
-    const publicDonations = (data || []).map(d => {
+    // Mapping data agar sesuai dengan tampilan frontend
+    const publicDonations = (data || []).map((d: any) => {
       let displayNama = 'Hamba Allah';
       
-      if (!d.anonim && d.user && (d.user as any).nama) {
-        displayNama = (d.user as any).nama;
+      // Cek apakah donatur tidak anonim DAN datanya ada
+      // d.donatur?.user?.nama -> cara akses data yang bersarang
+      if (!d.anonim && d.donatur?.user?.nama) {
+        displayNama = d.donatur.user.nama;
       }
 
       return {
@@ -47,8 +59,8 @@ export async function GET(
         nama: displayNama,
         nominal: d.nominal,
         nama_barang: d.nama_barang,
-        deskripsi_barang: d.deskripsi_barang, // Pastikan mengambil kolom deskripsi_barang
-        jenis: d.jenis_donasi,
+        deskripsi_barang: d.deskripsi_barang, 
+        jenis: d.jenis_donasi, 
         tanggal: d.created_at,
         status: d.status
       };
