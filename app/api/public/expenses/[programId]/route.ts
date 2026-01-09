@@ -12,22 +12,29 @@ export async function GET(
   request: Request,
   { params }: { params: { programId: string } }
 ) {
-  const programId = params.programId;
+  const programId = Number(params.programId); 
+
+  // Validasi jika bukan angka, langsung return kosong
+  if (isNaN(programId)) {
+    return NextResponse.json([], { status: 200 });
+  }
 
   try {
-    // Kita pilih kolom secara eksplisit untuk menghindari error tipe data tak terduga
     const { data, error } = await supabaseAdmin
       .from('pengeluaran')
-      .select('id_pengeluaran, deskripsi, nominal, item_details, type, tanggal, id_kegiatan')
-      .eq('id_kegiatan', programId)
+      .select('*')
+      .eq('id_kegiatan', programId) // Sekarang membandingkan Integer vs Integer
       .order('tanggal', { ascending: false });
 
     if (error) throw error;
 
-    return NextResponse.json(data || [], { status: 200 }); // Pastikan return array kosong jika null
+    return NextResponse.json(data || [], { 
+      status: 200,
+      headers: { 'Cache-Control': 'no-store' } 
+    });
 
   } catch (error: any) {
-    console.error('[PUBLIC_EXPENSES_GET] Error:', error.message);
-    return NextResponse.json({ message: 'Error fetching expenses' }, { status: 500 });
+    console.error('Error:', error.message);
+    return NextResponse.json({ message: 'Error' }, { status: 500 });
   }
 }
