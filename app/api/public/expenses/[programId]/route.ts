@@ -19,7 +19,7 @@ export async function GET(
     const { data, error } = await supabaseAdmin
       .from('pengeluaran')
       .select('id_pengeluaran, deskripsi, nominal, item_details, type, tanggal, id_kegiatan')
-      .eq('id_kegiatan', parseInt(programId))
+      .eq('id_kegiatan', programId)
       .order('tanggal', { ascending: false });
 
     if (error) throw error;
