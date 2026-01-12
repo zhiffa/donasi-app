@@ -48,7 +48,7 @@ function LoginContent() {
         throw new Error(data.message || 'Login gagal')
       }
 
-      // --- LOGIKA REDIRECT DIPERBAIKI ---
+      // --- LOGIKA REDIRECT ---
       // Cek apakah role adalah 'admin' (lama) ATAU mengandung kata 'Admin' (baru: Super Admin, Admin Program, dll)
       const role = data.user.role || '';
       if (role === 'admin' || role.includes('Admin')) {
